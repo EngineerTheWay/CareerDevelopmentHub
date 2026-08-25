@@ -1,105 +1,146 @@
 # Career Development Hub
 
-A job-search and professional-network tracker built as **one Dataverse data model behind four
-different Power Platform surfaces** — a conversational agent, a React app, a model-driven
-dashboard, and a phone app for capture-on-the-go.
+![React](https://img.shields.io/badge/React-19-61DAFB?logo=react&logoColor=white)
+![TypeScript](https://img.shields.io/badge/TypeScript-5-3178C6?logo=typescript&logoColor=white)
+![Vite](https://img.shields.io/badge/Vite-7-646CFF?logo=vite&logoColor=white)
+![Tailwind](https://img.shields.io/badge/Tailwind-4-06B6D4?logo=tailwindcss&logoColor=white)
+![Power Platform](https://img.shields.io/badge/Power%20Platform-Dataverse-742774?logo=microsoft&logoColor=white)
+![Copilot Studio](https://img.shields.io/badge/Copilot%20Studio-agent-0078D4?logo=microsoft&logoColor=white)
 
-The interesting part isn't any single surface. It's that they share one schema and one set of
-business rules, and each exists because it's genuinely the right shape for a different moment:
-typing at a desk, tapping at a conference, or asking a question out loud.
+A job-search and professional-network tracker built on Microsoft Power Platform. Seven
+Dataverse tables sit behind four surfaces: a Copilot Studio agent, a React code app, a
+model-driven app with a generative page, and a canvas app for phone.
 
 ---
 
 ## Architecture
 
 ```mermaid
-flowchart TB
-    subgraph surfaces [ ]
-        direction LR
-        A["**Career Copilot**<br/>Copilot Studio agent<br/><i>ask, review, draft</i>"]
-        B["**Code app**<br/>React 19 + Vite<br/><i>manage at a desk</i>"]
-        C["**Model-driven app**<br/>generative page<br/><i>dashboard + drill-through</i>"]
-        D["**Quick Capture**<br/>Canvas, phone<br/><i>enter during an event</i>"]
-    end
+flowchart TD
+    A["Career Copilot<br/>Copilot Studio agent"]
+    B["Code app<br/>React + Vite"]
+    C["Model-driven app<br/>generative page"]
+    D["Quick Capture<br/>canvas app, phone"]
 
-    A -->|21 typed tools| F["Power Automate<br/>flow layer"]
-    F --> DV[("**Dataverse**<br/>7 tables")]
-    B -->|@microsoft/power-apps SDK| DV
-    C -->|dataApi| DV
-    D -->|native connector| DV
-
-    F -.->|Outlook| EXT["Mail + Calendar"]
+    A --> F["21 Power Automate flows"]
+    F --> DV[("Dataverse<br/>7 tables")]
+    B --> DV
+    C --> DV
+    D --> DV
+    F --> EXT["Outlook<br/>mail and calendar"]
 ```
 
-### Data model
+---
 
-Seven tables. `Company` and `BusinessGroup` give organisations structure; `NetworkingContact`
-and `JobApplication` are the two things you actually track; `Interaction` and `FollowUp` are the
-time-series around them; `ContactApplication` is the many-to-many that lets one person be
-relevant to several applications.
+## The four surfaces
+
+| Surface | Built with | Used for |
+|---|---|---|
+| [Code app](CareerDevelopmentHubCode/apps/career-development-hub/) | React 19, Vite, Tailwind 4, TanStack Query + Table, react-hook-form, Zod | Full CRUD, bulk edit, filtering |
+| [Model-driven page](ModelApp/career-hub-dashboard/) | Generative page, Fluent UI, `dataApi` | Stat tiles that drill into saved views |
+| [Quick Capture](CareerDevelopmentHubCanvas/) | Canvas app, phone layout | Fast entry during a call or event |
+| [Web resources](ModelApp/webresources/) | Vanilla JS form scripts | Auto-naming, field guards, section logic |
+
+## Data model
+
+Seven tables:
+
+- **Company** and **BusinessGroup** — organisation structure
+- **NetworkingContact** and **JobApplication** — the tracked records
+- **Interaction** and **FollowUp** — dated activity against them
+- **ContactApplication** — many-to-many, so one person can relate to several applications
 
 ---
 
 ## The agent
 
-`Career Copilot` is a Copilot Studio agent whose entire capability surface is **21 typed Power
-Automate flows** — [`flows/definitions/`](flows/definitions/). It has no direct database access.
+`Career Copilot` is a Copilot Studio agent on the standard harness. Its entire tool surface
+is **21 typed Power Automate flows** ([`flows/definitions/`](flows/definitions/)); it has no
+direct database access.
 
-Two decisions drove that design, both written up in [`FLOW-CATALOGUE.md`](FLOW-CATALOGUE.md):
+The flows are typed per task rather than exposed as one generic write. From my design notes
+in [`FLOW-CATALOGUE.md`](FLOW-CATALOGUE.md):
 
-**Typed tools, not a generic one.** The obvious move is a single
-`DoThing(table, action, payload)` and let the model figure it out. That was rejected deliberately:
+> Type by **task shape**, not by table — but stop before a single generic
+> `DoThing(table, action, payload)`. The typed parameter list is the reliability mechanism:
+> a tool that demands `contactName, companyId, relationship` cannot have its relationship
+> field forgotten.
 
-> The typed parameter list *is* the reliability mechanism. A tool that demands
-> `contactName, companyId, relationship` cannot have its relationship field forgotten. A tool
-> that takes `payload: object` is the generic Dataverse connector again, with extra latency.
+Every write is preceded by `ResolveRecord`, which returns a match confidence — `exact`,
+`close`, `ambiguous`, or `none` — and [`agent/instructions.md`](agent/instructions.md) binds
+a behaviour to each: use `exact`, confirm on `close`, show candidates and stop on
+`ambiguous`, refuse on `none`.
 
-**Resolve before you write.** Every mutation is preceded by `ResolveRecord`, which turns a name
-into a GUID *and reports its own confidence* — `exact` / `close` / `ambiguous` / `none`. The agent
-instructions ([`agent/instructions.md`](agent/instructions.md)) bind each outcome to a behaviour:
-confirm on `close`, present candidates and stop on `ambiguous`, never invent on `none`. Most agent
-data-corruption bugs are a confident write against a wrong match; this makes that path unreachable
-rather than merely unlikely.
+The same pattern guards destructive calls. `DeleteRecord` takes a `confirmToken` and
+`SendDraft` takes a `confirmSubject` that must match the real draft.
+
+[`FLOW-CATALOGUE.md`](FLOW-CATALOGUE.md) also records a decision that was reversed mid-build:
+email started out scoped *outside* the flow layer, then moved into it.
 
 ---
 
-## The surfaces
+## Two problems worth reading about
 
-| Surface | Stack | What it's for |
-|---|---|---|
-| [Code app](CareerDevelopmentHubCode/apps/career-development-hub/) | React 19, Vite, Tailwind 4, TanStack Query + Table, react-hook-form + Zod | Full CRUD, bulk edit, filtering |
-| [Model-driven page](ModelApp/career-hub-dashboard/) | Generative page, Fluent UI, `dataApi` | Stat tiles that drill into saved views |
-| [Quick Capture](CareerDevelopmentHubCanvas/) | Canvas app, phone layout | Contact / interaction / follow-up entry in seconds |
-| [Web resources](ModelApp/webresources/) | Vanilla JS form scripts | Auto-naming, field guards, section logic |
+**Dataverse GUIDs aren't RFC-4122.** Dataverse generates sequential GUIDs server-side whose
+version nibble is `f`. The Power Apps SDK validates record ids with `uuid.validate`, which
+rejects them. Records created *in the code app* passed, because the client generates a v4
+uuid — but anything created by the model-driven app, the canvas app, or a flow could not be
+deleted or fetched by id, failing with `The recordId is not valid for this data source`.
+Fixed by overriding `isValidRecordId` in
+[`dataverse-data-source-operations.ts`](CareerDevelopmentHubCode/apps/career-development-hub/app-gen-sdk/data/dataverse/dataverse-data-source-operations.ts).
+
+This only surfaced because four surfaces write to the same tables.
+
+**The data layer can drift from Dataverse silently.** It's hand-maintained, so a renamed or
+deleted column stays in the mapping and fails at runtime — an unmapped choice is dropped with
+a warning, a stale column is rejected with a generic error.
+[`check-drift.mjs`](CareerDevelopmentHubCode/apps/career-development-hub/scripts/check-drift.mjs)
+selects every mapped column from every table and compares choice columns against `stringmap`.
+It caught `cws_priority` still in the mapping after deletion from Dataverse, which had been
+breaking every job-application create and update.
+
+---
+
+## How this was built
+
+The code app started in **Power Apps Vibe** and moved out to a standalone code app for more
+control over the implementation. That move wasn't optional in the end: Vibe-created apps are
+locked to the Vibe authoring experience, and `pac code push` against one fails with
+`AppSubtypeImmutable`. The app was recreated outside Vibe and is now developed locally with
+Vite HMR plus `pac code run` for connections.
+
+The trade is that nothing regenerates the data layer any more, which is what
+`check-drift.mjs` exists to cover.
+
+I used **Claude Code** as a development partner throughout — building parts of the app,
+working through the Power Platform issues above, and writing much of the documentation here.
 
 ---
 
 ## Repo map
 
-Being explicit about what was authored versus scaffolded, since the tree contains both:
+**Written by hand**
 
-**Hand-written**
 - `agent/` — instructions, evals, and the scripts that bind flows to the agent as tools
 - `flows/definitions/` — all 21 flow definitions
-- `CareerDevelopmentHubCode/apps/career-development-hub/src/` — `pages/`, `hooks/`, `lib/`, and
-  the non-`ui/` `components/` (~26 files)
-- `ModelApp/` — the generative page and the four web resources
+- `src/pages/`, `src/hooks/`, `src/lib/`, and the non-`ui/` `src/components/` — ~26 files
+- `ModelApp/` — the generative page and four web resources
 - `CareerDevelopmentHubCanvas/` — five screens of Power Fx
 - `canvas-plan/`, `FLOW-CATALOGUE.md` — design docs written before the code
 
-**Scaffolded or generated** (included so the app builds, not offered as original work)
+**Scaffolded or generated**, included so the app builds:
+
 - `src/components/ui/` — shadcn/ui primitives (53 files)
-- `src/generated/` — Dataverse models, services, validators generated from schema (35 files)
+- `src/generated/` — models, services, validators generated from the Dataverse schema (35 files)
 - `app-gen-sdk/` — vendored Power Apps SDK (47 files)
 
 ---
 
 ## About this repository
 
-This is a **sanitized public mirror**. The working repository is private; this one is produced by
-a publish script that copies hand-written source, rewrites tenant identifiers to placeholders, and
-then re-scans its own output — failing the build if any GUID, org URL, email, or local path
-survives. Placeholders like `<ENVIRONMENT_ID>` and `<ORG_NAME>` are that process, not omissions.
+This is a sanitized public mirror. The working repository is private; this one is generated by
+a script that copies hand-written source, rewrites tenant identifiers to placeholders, then
+re-scans its own output and fails if any GUID, org URL, email, or local path survives.
+Placeholders like `<ENVIRONMENT_ID>` are that process, not omissions.
 
-No solution export, no `customizations.xml`, no `.msapp`, and no environment state is published
-here. Those carry the most tenant metadata and the least readable signal.
+No solution export, `.msapp`, or environment state is published here.
