@@ -1,5 +1,10 @@
 # Shared Plan — Career Quick Capture
 
+> **Design snapshot — 2026-08-18.** This is a plan written *before* the canvas app was built,
+> kept as a record of intent. It is not maintained against the shipped implementation and
+> may describe fields or behaviour that changed during the build. For what actually
+> exists, read the code.
+
 Read this together with your screen brief. Everything here applies to **every** screen and
 must not be re-derived, re-styled or re-invented per screen.
 

@@ -1,5 +1,10 @@
 # Career Quick Capture — mobile canvas companion
 
+> **Design snapshot — 2026-08-18.** This is a plan written *before* the canvas app was built,
+> kept as a record of intent. It is not maintained against the shipped implementation and
+> may describe fields or behaviour that changed during the build. For what actually
+> exists, read the code.
+
 Environment: <ENVIRONMENT_NAME> (<ENVIRONMENT_ID>)
 Solution: CareerDevelopmentHub ("Career Development Hub - Dataverse")
 Layout: Phone. Purpose: fast data ENTRY on a call or at an event — not data management.

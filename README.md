@@ -85,8 +85,7 @@ Being explicit about what was authored versus scaffolded, since the tree contain
   the non-`ui/` `components/` (~26 files)
 - `ModelApp/` — the generative page and the four web resources
 - `CareerDevelopmentHubCanvas/` — five screens of Power Fx
-- `canvas-plan/`, `FLOW-CATALOGUE.md`, `AGENT-HARNESS-ANALYSIS.md` — design docs written
-  before the code
+- `canvas-plan/`, `FLOW-CATALOGUE.md` — design docs written before the code
 
 **Scaffolded or generated** (included so the app builds, not offered as original work)
 - `src/components/ui/` — shadcn/ui primitives (53 files)

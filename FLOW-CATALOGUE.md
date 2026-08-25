@@ -2,15 +2,17 @@
 
 Environment: `<ENVIRONMENT_NAME>` (`<ENVIRONMENT_ID>`)
 Solution: `CareerDevelopmentHub`
-Date: 2026-08-18
+Drafted: 2026-08-18 · Last reconciled against the deployed flows: 2026-08-25
 
-Companion to [AGENT-HARNESS-ANALYSIS.md](AGENT-HARNESS-ANALYSIS.md).
+All 21 flows below are deployed. Tiers 1 and 2 were planned up front; tier 3 was added
+after the original scope call on email was reversed — see that section.
 
-**Scope decisions already made:**
+**Scope decisions:**
 - No Outlook → Dataverse reminder sync. The `cws_reminder_*` / `cws_outlook_*` columns
   on `cws_followup` are leftover artifacts and stay unused.
 - Email drafting **and sending** are in scope; logging sent mail back to Dataverse is not.
-- Harness (standard vs. GitHub Copilot) is undecided. Every flow below works on either.
+- Harness: **standard**, decided after this document was first drafted. The agent binds
+  each flow below as a typed tool through a `botcomponent` record.
 
 ---
 
@@ -162,26 +164,78 @@ contacts, follow-up completion rate, pipeline counts by stage and relationship.
 
 ---
 
-## Email — no flow required
+## Email and calendar — the reversed decision
 
-Drafting and sending both stay outside the flow layer.
+**Originally scoped out.** The first draft of this document argued that drafting and
+sending should stay outside the flow layer, on the rule *MCP for browsing and outbound,
+flows for anything that touches Dataverse state*:
 
-| Step | Handled by | Why |
+| Step | Was to be handled by | Reasoning at the time |
 |---|---|---|
 | Gather facts | Flow 3 `GetRecordSummary` | Same grounding data every time |
 | Write the draft | The model | Wrapping a prompt in Power Automate adds nothing |
 | Show for approval | Harness | Topic node (standard) or instruction (GH harness) |
 | Send | Outlook MCP / Office 365 connector | Touches no Dataverse state |
 
-This follows the general rule: **MCP for browsing and outbound, flows for anything
-that touches Dataverse state.**
+**Reversed — flows 15 and 17–21 now own this.** The original reasoning had a hole it
+named itself: *"Send is irreversible, so the confirmation guardrail lives at the harness
+layer, not the flow layer."* Leaving the only irreversible action in the system guarded
+by an instruction the model chooses to follow is precisely the failure this catalogue's
+design rule exists to prevent.
 
-Send is irreversible, so the confirmation guardrail lives at the harness layer, not
-the flow layer — worth weighing when the harness is chosen. A topic can make approval
-structural; on the GitHub Copilot harness it remains an instruction the model follows.
+Moving it into the flow layer makes the guardrail structural instead. `SendDraft` takes
+a `confirmSubject` parameter and refuses when it does not match the draft — the same
+technique as `DeleteRecord`'s `confirmToken`. A typed required parameter cannot be
+skipped; an instruction can.
 
-If sent mail should ever become an Interaction record, that is flow 9 called after
-the send — additive, not a redesign.
+The state-touching rule still holds, it was just applied too narrowly. Drafts are state.
+They persist, they get revised across turns, and the agent needs to enumerate them —
+which is why `ListDrafts` and `UpdateDraft` exist rather than the model re-drafting from
+scratch each time.
+
+If sent mail should ever become an Interaction record, that is flow 9 called after the
+send — additive, not a redesign.
+
+---
+
+## Tier 3 — email and calendar
+
+### 15. `DraftEmail(to, subject, body, cc?)`
+
+Creates a real Outlook draft with the approved body. **Not sent** — it lands in Drafts for
+review. Grounding comes from flow 3; this flow only persists the result.
+
+### 16. `ListByCompany(companyId)`
+
+Everything recorded against one company: contacts who work there, applications filed there,
+and the business groups defined under it. Company-shaped questions otherwise cost three
+separate lookups.
+
+### 17. `CreateCalendarEvent(subject, date, startTime, durationMinutes, attendeeEmail?, location?, body?)`
+
+Schedules an Outlook event — interview, coffee chat, call, prep block. Times are passed in
+plain local terms and converted in the flow, so the model never does timezone arithmetic.
+
+### 18. `SendDraft(draftId, confirmSubject)`
+
+Sends a draft `DraftEmail` created. **The only irreversible action in the system.** Refuses
+unless `confirmSubject` matches the draft's actual subject, which forces the agent to have
+read the draft it is about to send.
+
+### 19. `UpdateCalendarEvent(eventId, action, date?, startTime?, durationMinutes?)`
+
+Reschedules or cancels an existing event. `action` is `reschedule` (with new date/time) or
+`cancel`.
+
+### 20. `UpdateDraft(draftId, to?, subject?, body?, cc?)`
+
+Revises an existing draft in place. Used whenever the user asks for changes — calling
+`DraftEmail` again would leave an orphaned draft behind.
+
+### 21. `ListDrafts(subjectContains?)`
+
+Drafts currently in the Drafts folder, newest first, with full bodies. Lets the agent
+resolve "the email I was writing to Sarah" to a real `draftId` rather than guessing.
 
 ---
 
@@ -191,7 +245,7 @@ the send — additive, not a redesign.
 |---|---|
 | `DormantContactSweep` | Should propose follow-ups, never auto-create. Nice-to-have |
 | `DataHygieneCheck` | Duplicate companies, orphaned junctions, applications missing a business group |
-| `WeeklyReview` (scheduled) | Trivial scheduled wrapper over flow 14 once that exists |
+| `WeeklyReview` (scheduled) | Trivial scheduled wrapper over flow 14, which now exists |
 
 ## Existing
 

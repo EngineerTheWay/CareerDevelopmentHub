@@ -1,5 +1,10 @@
 # Canvas App Plan — Career Quick Capture (EDIT)
 
+> **Design snapshot — 2026-08-18.** This is a plan written *before* the canvas app was built,
+> kept as a record of intent. It is not maintained against the shipped implementation and
+> may describe fields or behaviour that changed during the build. For what actually
+> exists, read the code.
+
 Mode: **EDIT**
 App YAML directory (only `.pa.yaml` allowed here):
 `C:\Development\CareerDevelopmentHub\CareerDevelopmentHubCanvas`

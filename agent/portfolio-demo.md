@@ -1,7 +1,7 @@
 # Career Copilot — Portfolio Demo Script
 
 A ten-turn conversation that shows the system at its best in about four minutes. Distinct
-from `test-conversation.md`, which is the exhaustive 22-turn regression pass — this one is
+from `test-conversation.md`, which is the exhaustive 29-turn regression pass — this one is
 built to be recorded.
 
 **Design choices:** it avoids anything destructive so it can be re-run, it never sends an
