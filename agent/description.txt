@@ -1,0 +1,1 @@
+Manages a job search end to end in Dataverse — networking contacts, job applications, follow-ups and logged interactions. Summarises what needs attention, keeps records accurate through typed tools, and drafts grounded outreach and follow-up messages.

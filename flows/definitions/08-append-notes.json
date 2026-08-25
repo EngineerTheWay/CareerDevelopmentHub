@@ -1,0 +1,196 @@
+{
+  "name": "Agent — AppendNotes",
+  "description": "Appends text to a record's Notes without ever overwriting what is already there. This is the ONLY supported way to write a Notes field on any Career Development Hub table — never write cws_notes through UpdateRecordFields.",
+  "definition": {
+    "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+      "$authentication": {
+        "defaultValue": {},
+        "type": "SecureObject"
+      },
+      "$connections": {
+        "defaultValue": {},
+        "type": "Object"
+      }
+    },
+    "triggers": {
+      "When_an_agent_calls_the_flow": {
+        "type": "Request",
+        "kind": "Skills",
+        "inputs": {
+          "schema": {
+            "type": "object",
+            "properties": {
+              "table": {
+                "type": "string",
+                "title": "table",
+                "description": "One of: contact, application, followUp, interaction"
+              },
+              "recordId": {
+                "type": "string",
+                "title": "recordId"
+              },
+              "text": {
+                "type": "string",
+                "title": "text",
+                "description": "The text to append"
+              },
+              "timestamp": {
+                "type": "boolean",
+                "title": "timestamp",
+                "description": "Prefix the entry with today's local date. Defaults to true. Optional — pass an empty string when it does not apply; never ask the user for it."
+              }
+            },
+            "required": [
+              "table",
+              "recordId",
+              "text"
+            ]
+          }
+        }
+      }
+    },
+    "actions": {
+      "Meta": {
+        "type": "Compose",
+        "inputs": {
+          "tableSet": "@if(equals(triggerBody()?['table'],'contact'),'cws_networkingcontacts',if(equals(triggerBody()?['table'],'application'),'cws_jobapplications',if(equals(triggerBody()?['table'],'followUp'),'cws_followups','cws_interactions')))",
+          "today": "@convertFromUtc(utcNow(),'Pacific Standard Time','yyyy-MM-dd')"
+        },
+        "runAfter": {}
+      },
+      "Get_current_notes": {
+        "type": "OpenApiConnection",
+        "inputs": {
+          "host": {
+            "connectionName": "shared_commondataserviceforapps",
+            "operationId": "GetItem",
+            "apiId": "/providers/Microsoft.PowerApps/apis/shared_commondataserviceforapps"
+          },
+          "parameters": {
+            "entityName": "@outputs('Meta')['tableSet']",
+            "recordId": "@triggerBody()?['recordId']",
+            "$select": "cws_notes"
+          }
+        },
+        "runAfter": {
+          "Meta": [
+            "Succeeded"
+          ]
+        }
+      },
+      "Compose_notes": {
+        "type": "Compose",
+        "inputs": {
+          "existing": "@coalesce(body('Get_current_notes')?['cws_notes'],'')",
+          "entry": "@if(not(equals(toLower(string(coalesce(triggerBody()?['timestamp'],'true'))),'false')), concat(outputs('Meta')['today'],': ',trim(triggerBody()?['text'])), trim(triggerBody()?['text']))"
+        },
+        "runAfter": {
+          "Get_current_notes": [
+            "Succeeded"
+          ]
+        }
+      },
+      "Merge_notes": {
+        "type": "Compose",
+        "inputs": "@if(empty(outputs('Compose_notes')['existing']), outputs('Compose_notes')['entry'], concat(outputs('Compose_notes')['existing'], decodeUriComponent('%0A%0A'), outputs('Compose_notes')['entry']))",
+        "runAfter": {
+          "Compose_notes": [
+            "Succeeded"
+          ]
+        }
+      },
+      "Update_notes": {
+        "type": "OpenApiConnection",
+        "inputs": {
+          "host": {
+            "connectionName": "shared_commondataserviceforapps",
+            "operationId": "UpdateRecord",
+            "apiId": "/providers/Microsoft.PowerApps/apis/shared_commondataserviceforapps"
+          },
+          "parameters": {
+            "entityName": "@outputs('Meta')['tableSet']",
+            "recordId": "@triggerBody()?['recordId']",
+            "item": {
+              "cws_notes": "@outputs('Merge_notes')"
+            }
+          }
+        },
+        "runAfter": {
+          "Merge_notes": [
+            "Succeeded"
+          ]
+        }
+      },
+      "Verify": {
+        "type": "OpenApiConnection",
+        "inputs": {
+          "host": {
+            "connectionName": "shared_commondataserviceforapps",
+            "operationId": "GetItem",
+            "apiId": "/providers/Microsoft.PowerApps/apis/shared_commondataserviceforapps"
+          },
+          "parameters": {
+            "entityName": "@outputs('Meta')['tableSet']",
+            "recordId": "@triggerBody()?['recordId']",
+            "$select": "cws_notes"
+          }
+        },
+        "runAfter": {
+          "Update_notes": [
+            "Succeeded"
+          ]
+        }
+      },
+      "Respond_to_the_agent": {
+        "type": "Response",
+        "kind": "Skills",
+        "inputs": {
+          "statusCode": 200,
+          "body": {
+            "recordId": "@triggerBody()?['recordId']",
+            "table": "@triggerBody()?['table']",
+            "appended": true,
+            "previousLength": "@length(outputs('Compose_notes')['existing'])",
+            "newLength": "@length(coalesce(body('Verify')?['cws_notes'],''))",
+            "entry": "@outputs('Compose_notes')['entry']",
+            "notes": "@coalesce(body('Verify')?['cws_notes'],'')"
+          },
+          "schema": {
+            "type": "object",
+            "properties": {
+              "recordId": {
+                "type": "string"
+              },
+              "table": {
+                "type": "string"
+              },
+              "appended": {
+                "type": "boolean"
+              },
+              "previousLength": {
+                "type": "integer",
+                "description": "Length of the notes before the append — always less than newLength"
+              },
+              "newLength": {
+                "type": "integer"
+              },
+              "entry": {
+                "type": "string"
+              },
+              "notes": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        "runAfter": {
+          "Verify": [
+            "Succeeded"
+          ]
+        }
+      }
+    }
+  }
+}

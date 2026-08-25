@@ -1,0 +1,349 @@
+{
+  "name": "Agent — GetReview",
+  "description": "A periodic review of the job search: applications that have gone quiet, contacts with no recent interaction, follow-up completion rate, and a count of applications by stage. Use this for weekly check-ins and 'how am I doing' questions, as opposed to GetDashboard which answers 'what is due right now'.",
+  "definition": {
+    "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+      "$authentication": {
+        "defaultValue": {},
+        "type": "SecureObject"
+      },
+      "$connections": {
+        "defaultValue": {},
+        "type": "Object"
+      }
+    },
+    "triggers": {
+      "When_an_agent_calls_the_flow": {
+        "type": "Request",
+        "kind": "Skills",
+        "inputs": {
+          "schema": {
+            "type": "object",
+            "properties": {
+              "stalledDays": {
+                "type": "integer",
+                "title": "stalledDays",
+                "description": "Days without an update before an open application counts as stalled. Defaults to 21. Pass the word none to use the default — never ask the user for this; only send a number if they explicitly asked for one."
+              },
+              "dormantDays": {
+                "type": "integer",
+                "title": "dormantDays",
+                "description": "Days without an interaction before a contact counts as dormant. Defaults to 60. Pass the word none to use the default — never ask the user for this; only send a number if they explicitly asked for one."
+              }
+            },
+            "required": [
+              "stalledDays",
+              "dormantDays"
+            ]
+          }
+        }
+      }
+    },
+    "actions": {
+      "Window": {
+        "type": "Compose",
+        "inputs": {
+          "today": "@convertFromUtc(utcNow(),'Pacific Standard Time','yyyy-MM-dd')",
+          "stalledBefore": "@convertFromUtc(addDays(utcNow(), mul(-1, if(or(empty(coalesce(triggerBody()?['stalledDays'],'')),equals(toLower(string(triggerBody()?['stalledDays'])),'none')),21,int(triggerBody()?['stalledDays'])))),'Pacific Standard Time','yyyy-MM-dd')",
+          "dormantBeforeUtc": "@concat(convertFromUtc(addDays(utcNow(), mul(-1, if(or(empty(coalesce(triggerBody()?['dormantDays'],'')),equals(toLower(string(triggerBody()?['dormantDays'])),'none')),60,int(triggerBody()?['dormantDays'])))),'Pacific Standard Time','yyyy-MM-dd'),'T00:00:00Z')"
+        },
+        "runAfter": {}
+      },
+      "Get_open_applications": {
+        "type": "OpenApiConnection",
+        "inputs": {
+          "host": {
+            "connectionName": "shared_commondataserviceforapps",
+            "operationId": "ListRecords",
+            "apiId": "/providers/Microsoft.PowerApps/apis/shared_commondataserviceforapps"
+          },
+          "parameters": {
+            "entityName": "cws_jobapplications",
+            "$select": "cws_jobapplicationid,cws_role,cws_stage,cws_nextstep,modifiedon",
+            "$filter": "statecode eq 0 and cws_stage ne 771670004",
+            "$expand": "cws_Company($select=cws_companyname)",
+            "$orderby": "modifiedon asc",
+            "$top": 300
+          }
+        },
+        "runAfter": {
+          "Window": [
+            "Succeeded"
+          ]
+        }
+      },
+      "Shape_applications": {
+        "type": "Select",
+        "inputs": {
+          "from": "@outputs('Get_open_applications')?['body/value']",
+          "select": {
+            "id": "@item()?['cws_jobapplicationid']",
+            "role": "@item()?['cws_role']",
+            "company": "@coalesce(item()?['cws_Company']?['cws_companyname'],'')",
+            "stage": "@item()?['cws_stage']",
+            "stageLabel": "@if(equals(item()?['cws_stage'],771670000),'Researching',if(equals(item()?['cws_stage'],771670001),'Applied',if(equals(item()?['cws_stage'],771670002),'Interviewing','Offer')))",
+            "nextStep": "@coalesce(item()?['cws_nextstep'],'')",
+            "lastUpdated": "@convertFromUtc(item()?['modifiedon'],'Pacific Standard Time','yyyy-MM-dd')"
+          }
+        },
+        "runAfter": {
+          "Get_open_applications": [
+            "Succeeded"
+          ]
+        }
+      },
+      "Stalled": {
+        "type": "Query",
+        "inputs": {
+          "from": "@body('Shape_applications')",
+          "where": "@less(item()?['lastUpdated'], outputs('Window')['stalledBefore'])"
+        },
+        "runAfter": {
+          "Shape_applications": [
+            "Succeeded"
+          ]
+        }
+      },
+      "Researching": {
+        "type": "Query",
+        "inputs": {
+          "from": "@body('Shape_applications')",
+          "where": "@equals(item()?['stageLabel'],'Researching')"
+        },
+        "runAfter": {
+          "Stalled": [
+            "Succeeded"
+          ]
+        }
+      },
+      "Applied": {
+        "type": "Query",
+        "inputs": {
+          "from": "@body('Shape_applications')",
+          "where": "@equals(item()?['stageLabel'],'Applied')"
+        },
+        "runAfter": {
+          "Researching": [
+            "Succeeded"
+          ]
+        }
+      },
+      "Interviewing": {
+        "type": "Query",
+        "inputs": {
+          "from": "@body('Shape_applications')",
+          "where": "@equals(item()?['stageLabel'],'Interviewing')"
+        },
+        "runAfter": {
+          "Applied": [
+            "Succeeded"
+          ]
+        }
+      },
+      "Offer": {
+        "type": "Query",
+        "inputs": {
+          "from": "@body('Shape_applications')",
+          "where": "@equals(item()?['stageLabel'],'Offer')"
+        },
+        "runAfter": {
+          "Interviewing": [
+            "Succeeded"
+          ]
+        }
+      },
+      "Get_recent_interactions": {
+        "type": "OpenApiConnection",
+        "inputs": {
+          "host": {
+            "connectionName": "shared_commondataserviceforapps",
+            "operationId": "ListRecords",
+            "apiId": "/providers/Microsoft.PowerApps/apis/shared_commondataserviceforapps"
+          },
+          "parameters": {
+            "entityName": "cws_interactions",
+            "$select": "cws_interactionid,_cws_contact_value,cws_interactiondate",
+            "$filter": "@concat('statecode eq 0 and cws_interactiondate ge ', outputs('Window')['dormantBeforeUtc'])",
+            "$top": 500
+          }
+        },
+        "runAfter": {
+          "Offer": [
+            "Succeeded"
+          ]
+        }
+      },
+      "Interacted_ids": {
+        "type": "Compose",
+        "inputs": "@join(body('Select_interacted_contacts'),',')",
+        "runAfter": {
+          "Select_interacted_contacts": [
+            "Succeeded"
+          ]
+        }
+      },
+      "Select_interacted_contacts": {
+        "type": "Select",
+        "inputs": {
+          "from": "@outputs('Get_recent_interactions')?['body/value']",
+          "select": "@coalesce(item()?['_cws_contact_value'],'')"
+        },
+        "runAfter": {
+          "Get_recent_interactions": [
+            "Succeeded"
+          ]
+        }
+      },
+      "Get_contacts": {
+        "type": "OpenApiConnection",
+        "inputs": {
+          "host": {
+            "connectionName": "shared_commondataserviceforapps",
+            "operationId": "ListRecords",
+            "apiId": "/providers/Microsoft.PowerApps/apis/shared_commondataserviceforapps"
+          },
+          "parameters": {
+            "entityName": "cws_networkingcontacts",
+            "$select": "cws_networkingcontactid,cws_contactname,cws_role,cws_email,cws_relationship",
+            "$filter": "statecode eq 0",
+            "$expand": "cws_Company($select=cws_companyname)",
+            "$top": 500
+          }
+        },
+        "runAfter": {
+          "Interacted_ids": [
+            "Succeeded"
+          ]
+        }
+      },
+      "Shape_contacts": {
+        "type": "Select",
+        "inputs": {
+          "from": "@outputs('Get_contacts')?['body/value']",
+          "select": {
+            "id": "@item()?['cws_networkingcontactid']",
+            "name": "@item()?['cws_contactname']",
+            "company": "@coalesce(item()?['cws_Company']?['cws_companyname'],'')",
+            "role": "@coalesce(item()?['cws_role'],'')",
+            "email": "@coalesce(item()?['cws_email'],'')",
+            "relationship": "@item()?['cws_relationship']"
+          }
+        },
+        "runAfter": {
+          "Get_contacts": [
+            "Succeeded"
+          ]
+        }
+      },
+      "Dormant_contacts": {
+        "type": "Query",
+        "inputs": {
+          "from": "@body('Shape_contacts')",
+          "where": "@not(contains(outputs('Interacted_ids'), item()?['id']))"
+        },
+        "runAfter": {
+          "Shape_contacts": [
+            "Succeeded"
+          ]
+        }
+      },
+      "Get_follow_ups": {
+        "type": "OpenApiConnection",
+        "inputs": {
+          "host": {
+            "connectionName": "shared_commondataserviceforapps",
+            "operationId": "ListRecords",
+            "apiId": "/providers/Microsoft.PowerApps/apis/shared_commondataserviceforapps"
+          },
+          "parameters": {
+            "entityName": "cws_followups",
+            "$select": "cws_followupid,cws_status",
+            "$filter": "statecode eq 0",
+            "$top": 500
+          }
+        },
+        "runAfter": {
+          "Dormant_contacts": [
+            "Succeeded"
+          ]
+        }
+      },
+      "Completed_follow_ups": {
+        "type": "Query",
+        "inputs": {
+          "from": "@outputs('Get_follow_ups')?['body/value']",
+          "where": "@equals(item()?['cws_status'],771670001)"
+        },
+        "runAfter": {
+          "Get_follow_ups": [
+            "Succeeded"
+          ]
+        }
+      },
+      "Respond_to_the_agent": {
+        "type": "Response",
+        "kind": "Skills",
+        "inputs": {
+          "statusCode": 200,
+          "body": {
+            "today": "@outputs('Window')['today']",
+            "openApplicationCount": "@length(body('Shape_applications'))",
+            "stageCounts": "@json(concat('{\"Researching\":',length(body('Researching')),',\"Applied\":',length(body('Applied')),',\"Interviewing\":',length(body('Interviewing')),',\"Offer\":',length(body('Offer')),'}'))",
+            "stalledCount": "@length(body('Stalled'))",
+            "stalledApplications": "@body('Stalled')",
+            "dormantCount": "@length(body('Dormant_contacts'))",
+            "dormantContacts": "@body('Dormant_contacts')",
+            "followUpTotal": "@length(outputs('Get_follow_ups')?['body/value'])",
+            "followUpCompleted": "@length(body('Completed_follow_ups'))",
+            "followUpCompletionRate": "@if(equals(length(outputs('Get_follow_ups')?['body/value']),0),'n/a',concat(string(div(mul(length(body('Completed_follow_ups')),100),length(outputs('Get_follow_ups')?['body/value']))),'%'))"
+          },
+          "schema": {
+            "type": "object",
+            "properties": {
+              "today": {
+                "type": "string"
+              },
+              "openApplicationCount": {
+                "type": "integer"
+              },
+              "stageCounts": {
+                "type": "object",
+                "description": "Open applications by stage"
+              },
+              "stalledCount": {
+                "type": "integer"
+              },
+              "stalledApplications": {
+                "type": "array",
+                "description": "Open applications with no update inside the stalled window"
+              },
+              "dormantCount": {
+                "type": "integer"
+              },
+              "dormantContacts": {
+                "type": "array",
+                "description": "Contacts with no interaction inside the dormant window"
+              },
+              "followUpTotal": {
+                "type": "integer"
+              },
+              "followUpCompleted": {
+                "type": "integer"
+              },
+              "followUpCompletionRate": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        "runAfter": {
+          "Completed_follow_ups": [
+            "Succeeded"
+          ]
+        }
+      }
+    }
+  }
+}

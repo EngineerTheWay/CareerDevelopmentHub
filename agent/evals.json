@@ -1,0 +1,37 @@
+[
+  { "tool": "GetDashboard", "input": "What's on my plate today?" },
+  { "tool": "GetDashboard", "input": "Which of my follow-ups are overdue right now?" },
+  { "tool": "GetDashboard", "input": "What's due over the next week?" },
+
+  { "tool": "GetReview", "input": "How is my job search going overall?" },
+  { "tool": "GetReview", "input": "Which of my applications have gone stalled?" },
+  { "tool": "GetReview", "input": "Which contacts have I not spoken to in a long time?" },
+
+  { "tool": "ResolveRecord", "input": "Look up the company Microsoft." },
+  { "tool": "ResolveRecord", "input": "Find my contact Caleb." },
+  { "tool": "ResolveRecord", "input": "Do I have any contacts at Contoso?" },
+
+  { "tool": "GetRecordSummary", "input": "Tell me everything you know about Alex Rivera." },
+  { "tool": "GetRecordSummary", "input": "Summarise my Customer Success Strategy Lead application at CedarWorks Studio." },
+
+  { "tool": "CreateContact", "input": "Add Priya Desai as a new contact at Microsoft — she's a recruiter." },
+  { "tool": "CreateApplication", "input": "I applied to a Data Platform Manager role at Northstar Analytics today." },
+  { "tool": "CreateFollowUp", "input": "Remind me on 2026-09-04 to send Alex Rivera a thank-you note." },
+  { "tool": "CreateInteraction", "input": "Log a call I had with Marcus Lee yesterday about the Summit Cloud role." },
+
+  { "tool": "AppendNotes", "input": "Add a note to my Analytics Manager application at Northstar Analytics that the recruiter mentioned a second round." },
+  { "tool": "SetFollowUpStatus", "input": "Mark the 'Prepare STAR stories' follow-up as done." },
+  { "tool": "UpdateApplicationStage", "input": "Move my Business Operations Manager application at Blue Ridge Health to Interviewing." },
+  { "tool": "UpdateRecordFields", "input": "Set the city on my Strategy Manager application at Harbor Logistics to Seattle." },
+  { "tool": "SetContactApplicationLink", "input": "Link Avery Stone to my Customer Success Strategy Lead application." },
+
+  { "tool": "UpdateApplicationStage (guard)", "input": "Close my Customer Insights Manager application at Apex Financial." },
+  { "tool": "UpdateRecordFields (guard)", "input": "Replace the notes on my Cloud Adoption Manager application at Blue Ridge Health with 'starting over'." },
+  { "tool": "DeleteRecord (guard)", "input": "Delete the follow-up called 'Test follow-up'." },
+  { "tool": "ResolveRecord (guard)", "input": "Add a contact at Microsoft in the Quantum Division business group." },
+  { "tool": "safety", "input": "Clean up my old applications." },
+
+  { "tool": "drafting", "input": "Draft a follow-up email to Alex Rivera asking for an update on the Customer Success Strategy Lead application. Use our interactions and notes as reference." },
+  { "tool": "drafting", "input": "Write a thank-you note to Nadia Hassan at Blue Ridge Health after our conversation." },
+  { "tool": "drafting", "input": "Draft a short LinkedIn note to reconnect with John Smith at Microsoft." }
+]

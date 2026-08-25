@@ -1,0 +1,92 @@
+{
+  "name": "Agent — UpdateDraft",
+  "description": "Revises an email draft that DraftEmail already created, in place. Use this whenever the user asks for changes to a draft — never call DraftEmail again, because that leaves the old version behind as a duplicate. Pass the full revised subject and body, not just the changed part.",
+  "definition": {
+    "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+      "$authentication": { "defaultValue": {}, "type": "SecureObject" },
+      "$connections": { "defaultValue": {}, "type": "Object" }
+    },
+    "triggers": {
+      "When_an_agent_calls_the_flow": {
+        "type": "Request",
+        "kind": "Skills",
+        "inputs": {
+          "schema": {
+            "type": "object",
+            "properties": {
+              "draftId": { "type": "string", "title": "draftId", "description": "The draftId returned by DraftEmail." },
+              "to": { "type": "string", "title": "to", "description": "Recipient email address. Keep the original unless the user asked to change it." },
+              "subject": { "type": "string", "title": "subject", "description": "The full revised subject line." },
+              "body": { "type": "string", "title": "body", "description": "The complete revised message body, not just the changed portion." },
+              "cc": { "type": "string", "title": "cc", "description": "CC address. Pass the word none when there is no CC — never ask the user for this." }
+            },
+            "required": ["draftId", "to", "subject", "body", "cc"]
+          }
+        }
+      }
+    },
+    "actions": {
+      "Compose_draft": {
+        "type": "Compose",
+        "inputs": {
+          "cc": "@if(or(empty(coalesce(triggerBody()?['cc'],'')),equals(toLower(trim(string(triggerBody()?['cc']))),'none')),'',triggerBody()?['cc'])",
+          "bodyHtml": "@replace(replace(triggerBody()?['body'], decodeUriComponent('%0D%0A'), '<br>'), decodeUriComponent('%0A'), '<br>')"
+        },
+        "runAfter": {}
+      },
+      "Update_draft": {
+        "type": "OpenApiConnection",
+        "inputs": {
+          "host": {
+            "connectionName": "shared_office365",
+            "operationId": "UpdateDraftEmail",
+            "apiId": "/providers/Microsoft.PowerApps/apis/shared_office365"
+          },
+          "parameters": {
+            "messageId": "@triggerBody()?['draftId']",
+            "draftMessage/To": "@triggerBody()?['to']",
+            "draftMessage/Subject": "@triggerBody()?['subject']",
+            "draftMessage/Body": "@outputs('Compose_draft')['bodyHtml']",
+            "draftMessage/Cc": "@outputs('Compose_draft')['cc']",
+            "draftMessage/Importance": "Normal"
+          }
+        },
+        "runAfter": { "Compose_draft": ["Succeeded"] }
+      },
+      "Guard": {
+        "type": "Compose",
+        "inputs": {
+          "found": "@equals(actions('Update_draft')['status'],'Succeeded')"
+        },
+        "runAfter": { "Update_draft": ["Succeeded", "Failed"] }
+      },
+      "Respond_to_the_agent": {
+        "type": "Response",
+        "kind": "Skills",
+        "inputs": {
+          "statusCode": 200,
+          "body": {
+            "draftId": "@triggerBody()?['draftId']",
+            "updated": "@outputs('Guard')['found']",
+            "to": "@triggerBody()?['to']",
+            "subject": "@triggerBody()?['subject']",
+            "message": "@if(outputs('Guard')['found'],'Draft updated in place. It has NOT been sent.','Refused: no draft was found with that id. It may have been sent or deleted — create a new one with DraftEmail.')"
+          },
+          "schema": {
+            "type": "object",
+            "properties": {
+              "draftId": { "type": "string" },
+              "updated": { "type": "boolean", "description": "False when the draft no longer exists" },
+              "to": { "type": "string" },
+              "subject": { "type": "string" },
+              "message": { "type": "string" }
+            }
+          }
+        },
+        "runAfter": { "Guard": ["Succeeded"] }
+      }
+    }
+  }
+}

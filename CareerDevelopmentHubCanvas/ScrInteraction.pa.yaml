@@ -1,0 +1,592 @@
+Screens:
+  ScrInteraction:
+    Properties:
+      Fill: =RGBA(252, 246, 233, 1)
+      OnHidden: |-
+        =Set(varPrefillContactId, "");
+        Set(varPrefillAppId, "");
+        Set(varPrefillIntxName, "");
+        Set(varIntxCompanyId, "")
+      OnVisible: |-
+        =Set(
+            varIntxCompanyId,
+            If(
+                Len(varPrefillContactId) > 0,
+                Text(LookUp('Networking Contacts', cws_networkingcontactid = GUID(varPrefillContactId)).cws_Company.cws_companyid),
+                Len(varPrefillAppId) > 0,
+                Text(LookUp('Job Applications', cws_jobapplicationid = GUID(varPrefillAppId)).cws_Company.cws_companyid),
+                ""
+            )
+        )
+    Children:
+      - conIntxRoot:
+          Control: GroupContainer
+          Variant: AutoLayout
+          Properties:
+            Fill: =RGBA(252, 246, 233, 1)
+            Height: =Parent.Height
+            LayoutAlignItems: =LayoutAlignItems.Stretch
+            LayoutDirection: =LayoutDirection.Vertical
+            RadiusBottomLeft: =0
+            RadiusBottomRight: =0
+            RadiusTopLeft: =0
+            RadiusTopRight: =0
+            Width: =Parent.Width
+          Children:
+            - conIntxTopBar:
+                Control: GroupContainer
+                Variant: AutoLayout
+                Properties:
+                  Fill: =RGBA(0, 72, 126, 1)
+                  FillPortions: =0
+                  Height: =56
+                  LayoutAlignItems: =LayoutAlignItems.Center
+                  LayoutDirection: =LayoutDirection.Horizontal
+                  LayoutGap: =8
+                  LayoutMinHeight: =56
+                  LayoutMinWidth: =0
+                  PaddingLeft: =6
+                  PaddingRight: =16
+                  RadiusBottomLeft: =0
+                  RadiusBottomRight: =0
+                  RadiusTopLeft: =0
+                  RadiusTopRight: =0
+                Children:
+                  - icoIntxBack:
+                      Control: ModernIcon
+                      Properties:
+                        AccessibleLabel: ="Back"
+                        AlignInContainer: =AlignInContainer.Center
+                        Height: =44
+                        Icon: ="ChevronLeft"
+                        IconColor: =RGBA(252, 248, 240, 1)
+                        IconStyle: =IconStyle.Filled
+                        LayoutMinHeight: =44
+                        LayoutMinWidth: =44
+                        OnSelect: |-
+                          =Set(varPrefillContactId, "");
+                          Navigate(Screen1, ScreenTransition.UnCoverRight)
+                        Width: =44
+                  - txtIntxTitle:
+                      Control: ModernText
+                      Properties:
+                        AccessibleLabel: ="Log interaction"
+                        AlignInContainer: =AlignInContainer.Stretch
+                        Color: =RGBA(252, 248, 240, 1)
+                        FillPortions: =1
+                        Font: =Font.'Segoe UI'
+                        FontWeight: =FontWeight.Semibold
+                        Height: =44
+                        PaddingBottom: =0
+                        PaddingLeft: =0
+                        PaddingRight: =0
+                        PaddingTop: =0
+                        Size: =18
+                        Text: ="Log interaction"
+                        Wrap: =false
+            - conIntxBody:
+                Control: GroupContainer
+                Variant: AutoLayout
+                Properties:
+                  Fill: =RGBA(252, 246, 233, 1)
+                  LayoutAlignItems: =LayoutAlignItems.Stretch
+                  LayoutDirection: =LayoutDirection.Vertical
+                  LayoutGap: =16
+                  LayoutMinHeight: =0
+                  LayoutMinWidth: =0
+                  LayoutOverflowY: =LayoutOverflow.Scroll
+                  PaddingBottom: =16
+                  PaddingLeft: =16
+                  PaddingRight: =16
+                  PaddingTop: =16
+                  RadiusBottomLeft: =0
+                  RadiusBottomRight: =0
+                  RadiusTopLeft: =0
+                  RadiusTopRight: =0
+                Children:
+                  - conIntxFldContact:
+                      Control: GroupContainer
+                      Variant: AutoLayout
+                      Properties:
+                        DropShadow: =DropShadow.None
+                        Fill: =RGBA(252, 246, 233, 1)
+                        FillPortions: =0
+                        Height: =122
+                        LayoutAlignItems: =LayoutAlignItems.Stretch
+                        LayoutDirection: =LayoutDirection.Vertical
+                        LayoutGap: =6
+                        LayoutMinHeight: =0
+                        LayoutMinWidth: =0
+                        RadiusBottomLeft: =12
+                        RadiusBottomRight: =12
+                        RadiusTopLeft: =12
+                        RadiusTopRight: =12
+                      Children:
+                        - txtIntxContactLabel:
+                            Control: ModernText
+                            Properties:
+                              AccessibleLabel: ="Contact, required"
+                              AlignInContainer: =AlignInContainer.Stretch
+                              Color: =RGBA(45, 63, 78, 1)
+                              Font: =Font.'Segoe UI'
+                              FontWeight: =FontWeight.Semibold
+                              Height: =18
+                              PaddingBottom: =0
+                              PaddingLeft: =0
+                              PaddingRight: =0
+                              PaddingTop: =0
+                              Size: =12
+                              Text: ="Contact *"
+                              Wrap: =false
+                        - cmbIntxContact:
+                            Control: ModernCombobox
+                            Properties:
+                              AccessibleLabel: ="Contact for this interaction"
+                              AlignInContainer: =AlignInContainer.Stretch
+                              AllowExternalSelectedItems: =true
+                              Appearance: =Appearance.Outline
+                              BorderColor: =RGBA(211, 201, 185, 1)
+                              Color: =RGBA(8, 19, 28, 1)
+                              DefaultSelectedItems: |-
+                                =If(
+                                    varPrefillContactId <> "",
+                                    Filter('Networking Contacts', cws_networkingcontactid = GUID(varPrefillContactId))
+                                )
+                              Fill: =RGBA(255, 255, 255, 1)
+                              Font: =Font.'Segoe UI'
+                              Height: =48
+                              InputTextPlaceholder: ="Search contacts"
+                              ItemDisplayText: =ThisItem.cws_contactname
+                              Items: |-
+                                =If(
+                                    Len(varIntxCompanyId) = 0,
+                                    SortByColumns('Networking Contacts', "cws_contactname", SortOrder.Ascending),
+                                    SortByColumns(
+                                        Filter('Networking Contacts', cws_Company.cws_companyid = GUID(varIntxCompanyId)),
+                                        "cws_contactname",
+                                        SortOrder.Ascending
+                                    )
+                                )
+                              OnChange: |-
+                                =Set(
+                                    varIntxCompanyId,
+                                    If(
+                                        CountRows(cmbIntxContact.SelectedItems) > 0,
+                                        Text(cmbIntxContact.Selected.cws_Company.cws_companyid),
+                                        CountRows(cmbIntxApp.SelectedItems) > 0,
+                                        Text(cmbIntxApp.Selected.cws_Company.cws_companyid),
+                                        ""
+                                    )
+                                )
+                              RadiusBottomLeft: =12
+                              RadiusBottomRight: =12
+                              RadiusTopLeft: =12
+                              RadiusTopRight: =12
+                              SelectMultiple: =false
+                              Size: =15
+                        - btnIntxNewContact:
+                            Control: ModernButton
+                            Properties:
+                              AccessibleLabel: ="Create a new contact"
+                              Align: =Align.Left
+                              AlignInContainer: =AlignInContainer.Stretch
+                              Appearance: =ButtonAppearance.Subtle
+                              Color: =RGBA(0, 72, 126, 1)
+                              Font: =Font.'Segoe UI'
+                              FontWeight: =FontWeight.Semibold
+                              Height: =44
+                              Layout: =ButtonLayout.TextOnly
+                              LayoutMinWidth: =160
+                              OnSelect: |-
+                                =Set(varReturnTo, "Interaction");
+                                Navigate(ScrContact, ScreenTransition.CoverRight)
+                              PaddingLeft: =4
+                              RadiusBottomLeft: =12
+                              RadiusBottomRight: =12
+                              RadiusTopLeft: =12
+                              RadiusTopRight: =12
+                              Size: =14
+                              Text: ="+ New contact"
+                              Width: =Parent.Width
+                  - conIntxFldDate:
+                      Control: GroupContainer
+                      Variant: AutoLayout
+                      Properties:
+                        DropShadow: =DropShadow.None
+                        Fill: =RGBA(252, 246, 233, 1)
+                        FillPortions: =0
+                        Height: =72
+                        LayoutAlignItems: =LayoutAlignItems.Stretch
+                        LayoutDirection: =LayoutDirection.Vertical
+                        LayoutGap: =6
+                        LayoutMinHeight: =0
+                        LayoutMinWidth: =0
+                        RadiusBottomLeft: =12
+                        RadiusBottomRight: =12
+                        RadiusTopLeft: =12
+                        RadiusTopRight: =12
+                      Children:
+                        - txtIntxDateLabel:
+                            Control: ModernText
+                            Properties:
+                              AccessibleLabel: ="Date, required"
+                              AlignInContainer: =AlignInContainer.Stretch
+                              Color: =RGBA(45, 63, 78, 1)
+                              Font: =Font.'Segoe UI'
+                              FontWeight: =FontWeight.Semibold
+                              Height: =18
+                              PaddingBottom: =0
+                              PaddingLeft: =0
+                              PaddingRight: =0
+                              PaddingTop: =0
+                              Size: =12
+                              Text: ="Date *"
+                              Wrap: =false
+                        - dpIntxDate:
+                            Control: ModernDatePicker
+                            Properties:
+                              AccessibleLabel: ="Interaction date"
+                              AlignInContainer: =AlignInContainer.Stretch
+                              Appearance: =Appearance.Outline
+                              BorderColor: =RGBA(211, 201, 185, 1)
+                              Color: =RGBA(8, 19, 28, 1)
+                              DefaultDate: =Today()
+                              Fill: =RGBA(255, 255, 255, 1)
+                              Font: =Font.'Segoe UI'
+                              Height: =48
+                              Placeholder: ="Pick a date"
+                              RadiusBottomLeft: =12
+                              RadiusBottomRight: =12
+                              RadiusTopLeft: =12
+                              RadiusTopRight: =12
+                              Size: =15
+                  - conIntxFldType:
+                      Control: GroupContainer
+                      Variant: AutoLayout
+                      Properties:
+                        DropShadow: =DropShadow.None
+                        Fill: =RGBA(252, 246, 233, 1)
+                        FillPortions: =0
+                        Height: =72
+                        LayoutAlignItems: =LayoutAlignItems.Stretch
+                        LayoutDirection: =LayoutDirection.Vertical
+                        LayoutGap: =6
+                        LayoutMinHeight: =0
+                        LayoutMinWidth: =0
+                        RadiusBottomLeft: =12
+                        RadiusBottomRight: =12
+                        RadiusTopLeft: =12
+                        RadiusTopRight: =12
+                      Children:
+                        - txtIntxTypeLabel:
+                            Control: ModernText
+                            Properties:
+                              AccessibleLabel: ="Interaction type, required"
+                              AlignInContainer: =AlignInContainer.Stretch
+                              Color: =RGBA(45, 63, 78, 1)
+                              Font: =Font.'Segoe UI'
+                              FontWeight: =FontWeight.Semibold
+                              Height: =18
+                              PaddingBottom: =0
+                              PaddingLeft: =0
+                              PaddingRight: =0
+                              PaddingTop: =0
+                              Size: =12
+                              Text: ="Type *"
+                              Wrap: =false
+                        - ddIntxType:
+                            Control: ModernDropdown
+                            Properties:
+                              AccessibleLabel: ="Interaction type"
+                              AlignInContainer: =AlignInContainer.Stretch
+                              Appearance: =Appearance.Outline
+                              BorderColor: =RGBA(211, 201, 185, 1)
+                              Color: =RGBA(8, 19, 28, 1)
+                              Fill: =RGBA(255, 255, 255, 1)
+                              Font: =Font.'Segoe UI'
+                              Height: =48
+                              ItemDisplayText: =ThisItem.Label
+                              Items: |-
+                                =Table(
+                                    { Label: "Networking Chat", Val: 'Interaction Type (Interactions)'.'Networking Chat' },
+                                    { Label: "LinkedIn", Val: 'Interaction Type (Interactions)'.LinkedIn },
+                                    { Label: "Email", Val: 'Interaction Type (Interactions)'.Email },
+                                    { Label: "Call", Val: 'Interaction Type (Interactions)'.Call },
+                                    { Label: "Meeting", Val: 'Interaction Type (Interactions)'.Meeting },
+                                    { Label: "Event", Val: 'Interaction Type (Interactions)'.Event },
+                                    { Label: "Interview", Val: 'Interaction Type (Interactions)'.Interview },
+                                    { Label: "Other", Val: 'Interaction Type (Interactions)'.Other }
+                                )
+                              RadiusBottomLeft: =12
+                              RadiusBottomRight: =12
+                              RadiusTopLeft: =12
+                              RadiusTopRight: =12
+                              Size: =15
+                  - conIntxFldApp:
+                      Control: GroupContainer
+                      Variant: AutoLayout
+                      Properties:
+                        DropShadow: =DropShadow.None
+                        Fill: =RGBA(252, 246, 233, 1)
+                        FillPortions: =0
+                        Height: =72
+                        LayoutAlignItems: =LayoutAlignItems.Stretch
+                        LayoutDirection: =LayoutDirection.Vertical
+                        LayoutGap: =6
+                        LayoutMinHeight: =0
+                        LayoutMinWidth: =0
+                        RadiusBottomLeft: =12
+                        RadiusBottomRight: =12
+                        RadiusTopLeft: =12
+                        RadiusTopRight: =12
+                      Children:
+                        - txtIntxAppLabel:
+                            Control: ModernText
+                            Properties:
+                              AccessibleLabel: ="Related application, optional"
+                              AlignInContainer: =AlignInContainer.Stretch
+                              Color: =RGBA(45, 63, 78, 1)
+                              Font: =Font.'Segoe UI'
+                              FontWeight: =FontWeight.Semibold
+                              Height: =18
+                              PaddingBottom: =0
+                              PaddingLeft: =0
+                              PaddingRight: =0
+                              PaddingTop: =0
+                              Size: =12
+                              Text: ="Related application"
+                              Wrap: =false
+                        - cmbIntxApp:
+                            Control: ModernCombobox
+                            Properties:
+                              AccessibleLabel: ="Related job application"
+                              AlignInContainer: =AlignInContainer.Stretch
+                              AllowExternalSelectedItems: =true
+                              Appearance: =Appearance.Outline
+                              BorderColor: =RGBA(211, 201, 185, 1)
+                              Color: =RGBA(8, 19, 28, 1)
+                              DefaultSelectedItems: |-
+                                =If(
+                                    Len(varPrefillAppId) > 0,
+                                    Filter('Job Applications', cws_jobapplicationid = GUID(varPrefillAppId))
+                                )
+                              Fill: =RGBA(255, 255, 255, 1)
+                              Font: =Font.'Segoe UI'
+                              Height: =48
+                              InputTextPlaceholder: ="Optional"
+                              ItemDisplayText: |-
+                                =ThisItem.Role
+                                  & If(Len(ThisItem.Company.'Company Name') > 0,
+                                       " - " & ThisItem.Company.'Company Name',
+                                       "")
+                              Items: |-
+                                =If(
+                                    Len(varIntxCompanyId) = 0,
+                                    SortByColumns('Job Applications', "cws_role", SortOrder.Ascending),
+                                    SortByColumns(
+                                        Filter('Job Applications', cws_Company.cws_companyid = GUID(varIntxCompanyId)),
+                                        "cws_role",
+                                        SortOrder.Ascending
+                                    )
+                                )
+                              OnChange: |-
+                                =Set(
+                                    varIntxCompanyId,
+                                    If(
+                                        CountRows(cmbIntxApp.SelectedItems) > 0,
+                                        Text(cmbIntxApp.Selected.cws_Company.cws_companyid),
+                                        CountRows(cmbIntxContact.SelectedItems) > 0,
+                                        Text(cmbIntxContact.Selected.cws_Company.cws_companyid),
+                                        ""
+                                    )
+                                )
+                              RadiusBottomLeft: =12
+                              RadiusBottomRight: =12
+                              RadiusTopLeft: =12
+                              RadiusTopRight: =12
+                              SelectMultiple: =false
+                              Size: =15
+                  - conIntxFldName:
+                      Control: GroupContainer
+                      Variant: AutoLayout
+                      Properties:
+                        DropShadow: =DropShadow.None
+                        Fill: =RGBA(252, 246, 233, 1)
+                        FillPortions: =0
+                        Height: =72
+                        LayoutAlignItems: =LayoutAlignItems.Stretch
+                        LayoutDirection: =LayoutDirection.Vertical
+                        LayoutGap: =6
+                        LayoutMinHeight: =0
+                        LayoutMinWidth: =0
+                        RadiusBottomLeft: =12
+                        RadiusBottomRight: =12
+                        RadiusTopLeft: =12
+                        RadiusTopRight: =12
+                      Children:
+                        - txtIntxNameLabel:
+                            Control: ModernText
+                            Properties:
+                              AccessibleLabel: ="Interaction name, optional"
+                              AlignInContainer: =AlignInContainer.Stretch
+                              Color: =RGBA(45, 63, 78, 1)
+                              FillPortions: =0
+                              Font: =Font.'Segoe UI'
+                              FontWeight: =FontWeight.Semibold
+                              Height: =18
+                              PaddingBottom: =0
+                              PaddingLeft: =0
+                              PaddingRight: =0
+                              PaddingTop: =0
+                              Size: =12
+                              Text: ="Interaction name"
+                              Wrap: =false
+                        - inpIntxName:
+                            Control: ModernTextInput
+                            Properties:
+                              AccessibleLabel: ="Interaction name"
+                              AlignInContainer: =AlignInContainer.Stretch
+                              Appearance: =Appearance.Outline
+                              BorderColor: =RGBA(211, 201, 185, 1)
+                              Color: =RGBA(8, 19, 28, 1)
+                              Default: =varPrefillIntxName
+                              Fill: =RGBA(255, 255, 255, 1)
+                              FillPortions: =0
+                              Font: =Font.'Segoe UI'
+                              Height: =48
+                              MaxLength: =200
+                              Placeholder: ="Leave blank to name it automatically"
+                              RadiusBottomLeft: =12
+                              RadiusBottomRight: =12
+                              RadiusTopLeft: =12
+                              RadiusTopRight: =12
+                              Size: =15
+                  - conIntxFldNotes:
+                      Control: GroupContainer
+                      Variant: AutoLayout
+                      Properties:
+                        DropShadow: =DropShadow.None
+                        Fill: =RGBA(252, 246, 233, 1)
+                        FillPortions: =0
+                        Height: =120
+                        LayoutAlignItems: =LayoutAlignItems.Stretch
+                        LayoutDirection: =LayoutDirection.Vertical
+                        LayoutGap: =6
+                        LayoutMinHeight: =0
+                        LayoutMinWidth: =0
+                        RadiusBottomLeft: =12
+                        RadiusBottomRight: =12
+                        RadiusTopLeft: =12
+                        RadiusTopRight: =12
+                      Children:
+                        - txtIntxNotesLabel:
+                            Control: ModernText
+                            Properties:
+                              AccessibleLabel: ="Notes, optional"
+                              AlignInContainer: =AlignInContainer.Stretch
+                              Color: =RGBA(45, 63, 78, 1)
+                              Font: =Font.'Segoe UI'
+                              FontWeight: =FontWeight.Semibold
+                              Height: =18
+                              PaddingBottom: =0
+                              PaddingLeft: =0
+                              PaddingRight: =0
+                              PaddingTop: =0
+                              Size: =12
+                              Text: ="Notes"
+                              Wrap: =false
+                        - inpIntxNotes:
+                            Control: ModernTextInput
+                            Properties:
+                              AccessibleLabel: ="Interaction notes"
+                              AlignInContainer: =AlignInContainer.Stretch
+                              Appearance: =Appearance.Outline
+                              BorderColor: =RGBA(211, 201, 185, 1)
+                              Color: =RGBA(8, 19, 28, 1)
+                              Fill: =RGBA(255, 255, 255, 1)
+                              Font: =Font.'Segoe UI'
+                              Height: =96
+                              MaxLength: =2000
+                              Placeholder: ="What was relevant from the interaction?"
+                              RadiusBottomLeft: =12
+                              RadiusBottomRight: =12
+                              RadiusTopLeft: =12
+                              RadiusTopRight: =12
+                              Size: =15
+                              Type: =TextInputType.Multiline
+            - conIntxFooter:
+                Control: GroupContainer
+                Variant: AutoLayout
+                Properties:
+                  BorderColor: =RGBA(211, 201, 185, 1)
+                  BorderThickness: =1
+                  Fill: =RGBA(255, 255, 255, 1)
+                  FillPortions: =0
+                  Height: =76
+                  LayoutAlignItems: =LayoutAlignItems.Stretch
+                  LayoutDirection: =LayoutDirection.Vertical
+                  LayoutMinHeight: =76
+                  LayoutMinWidth: =0
+                  PaddingBottom: =12
+                  PaddingLeft: =16
+                  PaddingRight: =16
+                  PaddingTop: =12
+                  RadiusBottomLeft: =12
+                  RadiusBottomRight: =12
+                  RadiusTopLeft: =12
+                  RadiusTopRight: =12
+                Children:
+                  - btnIntxSave:
+                      Control: ModernButton
+                      Properties:
+                        AccessibleLabel: ="Save interaction"
+                        AlignInContainer: =AlignInContainer.Stretch
+                        BasePaletteColor: =RGBA(0, 72, 126, 1)
+                        Color: =RGBA(252, 248, 240, 1)
+                        DisplayMode: |-
+                          =If(
+                              CountRows(cmbIntxContact.SelectedItems) > 0
+                                && !IsBlank(dpIntxDate.SelectedDate)
+                                && !IsBlank(ddIntxType.Selected.Label),
+                              DisplayMode.Edit,
+                              DisplayMode.Disabled
+                          )
+                        Font: =Font.'Segoe UI'
+                        FontWeight: =FontWeight.Semibold
+                        Height: =52
+                        Layout: =ButtonLayout.TextOnly
+                        LayoutMinWidth: =160
+                        OnSelect: |-
+                          =Patch(Interactions, Defaults(Interactions),
+                              { Contact: cmbIntxContact.Selected,
+                                'Interaction Date': dpIntxDate.SelectedDate,
+                                'Interaction Type': ddIntxType.Selected.Val,
+                                'Related Application': cmbIntxApp.Selected,
+                                Notes: inpIntxNotes.Text,
+                                'Interaction Name': If(
+                                    Len(Trim(inpIntxName.Text)) > 0,
+                                    Trim(inpIntxName.Text),
+                                    ddIntxType.Selected.Label & " with " & cmbIntxContact.Selected.'Contact Name'
+                                ) }
+                          );
+                          Set(varSavedKind, "Interaction");
+                          Set(varSavedTitle, If(
+                              Len(Trim(inpIntxName.Text)) > 0,
+                              Trim(inpIntxName.Text),
+                              ddIntxType.Selected.Label & " with " & cmbIntxContact.Selected.'Contact Name'
+                          ));
+                          Set(varSavedContactId, Text(cmbIntxContact.Selected.'Networking Contact'));
+                          Set(varSavedContactName, cmbIntxContact.Selected.'Contact Name');
+                          Set(varPrefillContactId, "");
+                          Set(varReturnTo, "");
+                          Set(varPrefillAppId, "");
+                          Set(varPrefillIntxName, "");
+                          Set(varIntxCompanyId, "");
+                          Navigate(ScrSaved, ScreenTransition.Fade)
+                        RadiusBottomLeft: =12
+                        RadiusBottomRight: =12
+                        RadiusTopLeft: =12
+                        RadiusTopRight: =12
+                        Size: =16
+                        Text: ="Save interaction"
+                        Width: =Parent.Width

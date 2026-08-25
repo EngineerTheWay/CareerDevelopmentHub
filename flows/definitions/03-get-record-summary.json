@@ -1,0 +1,216 @@
+{
+  "name": "Agent — GetRecordSummary",
+  "description": "Returns a Contact, Job Application or Follow-Up together with its company, notes, full interaction history, related follow-ups and linked records. This is the grounding call for every summary and every drafted email — call it before drafting so the facts come from Dataverse, not from the conversation.",
+  "definition": {
+    "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+      "$authentication": { "defaultValue": {}, "type": "SecureObject" },
+      "$connections": { "defaultValue": {}, "type": "Object" }
+    },
+    "triggers": {
+      "When_an_agent_calls_the_flow": {
+        "type": "Request",
+        "kind": "Skills",
+        "inputs": {
+          "schema": {
+            "type": "object",
+            "properties": {
+              "type": {
+                "type": "string",
+                "title": "type",
+                "description": "One of: contact, application, followUp"
+              },
+              "id": {
+                "type": "string",
+                "title": "id",
+                "description": "GUID of the record, as returned by ResolveRecord"
+              }
+            },
+            "required": ["type", "id"]
+          }
+        }
+      }
+    },
+    "actions": {
+      "Meta": {
+        "type": "Compose",
+        "inputs": {
+          "tableSet": "@if(equals(triggerBody()?['type'],'contact'),'cws_networkingcontacts',if(equals(triggerBody()?['type'],'application'),'cws_jobapplications','cws_followups'))",
+          "select": "@if(equals(triggerBody()?['type'],'contact'),'cws_networkingcontactid,cws_contactname,cws_role,cws_email,cws_city,cws_relationship,cws_notes',if(equals(triggerBody()?['type'],'application'),'cws_jobapplicationid,cws_role,cws_stage,cws_dateapplied,cws_jobid,cws_joblink,cws_city,cws_arrangement,cws_nextstep,cws_notes','cws_followupid,cws_title,cws_duedate,cws_completeddate,cws_status,cws_relatedtype,cws_notes'))",
+          "expand": "@if(equals(triggerBody()?['type'],'followUp'),'cws_RelatedContact($select=cws_networkingcontactid,cws_contactname),cws_RelatedApplication($select=cws_jobapplicationid,cws_role)','cws_Company($select=cws_companyname),cws_BusinessGroup($select=cws_businessgroupname)')"
+        },
+        "runAfter": {}
+      },
+      "Get_record": {
+        "type": "OpenApiConnection",
+        "inputs": {
+          "host": {
+            "connectionName": "shared_commondataserviceforapps",
+            "operationId": "GetItem",
+            "apiId": "/providers/Microsoft.PowerApps/apis/shared_commondataserviceforapps"
+          },
+          "parameters": {
+            "entityName": "@outputs('Meta')['tableSet']",
+            "recordId": "@triggerBody()?['id']",
+            "$select": "@outputs('Meta')['select']",
+            "$expand": "@outputs('Meta')['expand']"
+          }
+        },
+        "runAfter": { "Meta": ["Succeeded"] }
+      },
+      "Subject": {
+        "type": "Compose",
+        "inputs": {
+          "subjectType": "@if(not(equals(triggerBody()?['type'],'followUp')), triggerBody()?['type'], if(equals(body('Get_record')?['cws_relatedtype'],771670000),'contact',if(equals(body('Get_record')?['cws_relatedtype'],771670001),'application','none')))",
+          "subjectId": "@if(not(equals(triggerBody()?['type'],'followUp')), triggerBody()?['id'], coalesce(body('Get_record')?['cws_RelatedContact']?['cws_networkingcontactid'], body('Get_record')?['cws_RelatedApplication']?['cws_jobapplicationid'], ''))"
+        },
+        "runAfter": { "Get_record": ["Succeeded"] }
+      },
+      "Related_filters": {
+        "type": "Compose",
+        "inputs": {
+          "interactions": "@if(equals(outputs('Subject')['subjectType'],'contact'), concat('statecode eq 0 and _cws_contact_value eq ', outputs('Subject')['subjectId']), if(equals(outputs('Subject')['subjectType'],'application'), concat('statecode eq 0 and _cws_relatedapplication_value eq ', outputs('Subject')['subjectId']), 'cws_interactionid eq 00000000-0000-0000-0000-000000000000'))",
+          "followUps": "@if(equals(outputs('Subject')['subjectType'],'contact'), concat('statecode eq 0 and _cws_relatedcontact_value eq ', outputs('Subject')['subjectId']), if(equals(outputs('Subject')['subjectType'],'application'), concat('statecode eq 0 and _cws_relatedapplication_value eq ', outputs('Subject')['subjectId']), 'cws_followupid eq 00000000-0000-0000-0000-000000000000'))",
+          "links": "@if(equals(outputs('Subject')['subjectType'],'contact'), concat('statecode eq 0 and _cws_networkingcontact_value eq ', outputs('Subject')['subjectId']), if(equals(outputs('Subject')['subjectType'],'application'), concat('statecode eq 0 and _cws_jobapplication_value eq ', outputs('Subject')['subjectId']), 'cws_contactapplicationid eq 00000000-0000-0000-0000-000000000000'))"
+        },
+        "runAfter": { "Subject": ["Succeeded"] }
+      },
+      "Get_interactions": {
+        "type": "OpenApiConnection",
+        "inputs": {
+          "host": {
+            "connectionName": "shared_commondataserviceforapps",
+            "operationId": "ListRecords",
+            "apiId": "/providers/Microsoft.PowerApps/apis/shared_commondataserviceforapps"
+          },
+          "parameters": {
+            "entityName": "cws_interactions",
+            "$select": "cws_interactionid,cws_interactionname,cws_interactiondate,cws_interactiontype,cws_notes",
+            "$filter": "@outputs('Related_filters')['interactions']",
+            "$expand": "cws_Contact($select=cws_contactname),cws_RelatedApplication($select=cws_role)",
+            "$orderby": "cws_interactiondate desc",
+            "$top": 50
+          }
+        },
+        "runAfter": { "Related_filters": ["Succeeded"] }
+      },
+      "Shape_interactions": {
+        "type": "Select",
+        "inputs": {
+          "from": "@outputs('Get_interactions')?['body/value']",
+          "select": {
+            "id": "@item()?['cws_interactionid']",
+            "name": "@coalesce(item()?['cws_interactionname'],'')",
+            "date": "@if(empty(coalesce(item()?['cws_interactiondate'],'')),'',convertFromUtc(item()?['cws_interactiondate'],'Pacific Standard Time','yyyy-MM-dd'))",
+            "type": "@item()?['cws_interactiontype']",
+            "typeLabel": "@if(equals(item()?['cws_interactiontype'],771670000),'Networking Chat',if(equals(item()?['cws_interactiontype'],771670001),'LinkedIn',if(equals(item()?['cws_interactiontype'],771670002),'Email',if(equals(item()?['cws_interactiontype'],771670003),'Call',if(equals(item()?['cws_interactiontype'],771670004),'Meeting',if(equals(item()?['cws_interactiontype'],771670005),'Event',if(equals(item()?['cws_interactiontype'],771670006),'Interview','Other')))))))",
+            "contact": "@coalesce(item()?['cws_Contact']?['cws_contactname'],'')",
+            "application": "@coalesce(item()?['cws_RelatedApplication']?['cws_role'],'')",
+            "notes": "@coalesce(item()?['cws_notes'],'')"
+          }
+        },
+        "runAfter": { "Get_interactions": ["Succeeded"] }
+      },
+      "Get_related_follow_ups": {
+        "type": "OpenApiConnection",
+        "inputs": {
+          "host": {
+            "connectionName": "shared_commondataserviceforapps",
+            "operationId": "ListRecords",
+            "apiId": "/providers/Microsoft.PowerApps/apis/shared_commondataserviceforapps"
+          },
+          "parameters": {
+            "entityName": "cws_followups",
+            "$select": "cws_followupid,cws_title,cws_duedate,cws_completeddate,cws_status,cws_notes",
+            "$filter": "@outputs('Related_filters')['followUps']",
+            "$orderby": "cws_duedate asc",
+            "$top": 50
+          }
+        },
+        "runAfter": { "Shape_interactions": ["Succeeded"] }
+      },
+      "Shape_follow_ups": {
+        "type": "Select",
+        "inputs": {
+          "from": "@outputs('Get_related_follow_ups')?['body/value']",
+          "select": {
+            "id": "@item()?['cws_followupid']",
+            "title": "@item()?['cws_title']",
+            "dueDate": "@if(empty(coalesce(item()?['cws_duedate'],'')),'',convertFromUtc(item()?['cws_duedate'],'Pacific Standard Time','yyyy-MM-dd'))",
+            "completedDate": "@if(empty(coalesce(item()?['cws_completeddate'],'')),'',convertFromUtc(item()?['cws_completeddate'],'Pacific Standard Time','yyyy-MM-dd'))",
+            "status": "@item()?['cws_status']",
+            "statusLabel": "@if(equals(item()?['cws_status'],771670001),'Completed','Open')",
+            "notes": "@coalesce(item()?['cws_notes'],'')"
+          }
+        },
+        "runAfter": { "Get_related_follow_ups": ["Succeeded"] }
+      },
+      "Get_links": {
+        "type": "OpenApiConnection",
+        "inputs": {
+          "host": {
+            "connectionName": "shared_commondataserviceforapps",
+            "operationId": "ListRecords",
+            "apiId": "/providers/Microsoft.PowerApps/apis/shared_commondataserviceforapps"
+          },
+          "parameters": {
+            "entityName": "cws_contactapplications",
+            "$select": "cws_contactapplicationid,cws_contactapplicationname",
+            "$filter": "@outputs('Related_filters')['links']",
+            "$expand": "cws_NetworkingContact($select=cws_networkingcontactid,cws_contactname,cws_email,cws_role),cws_JobApplication($select=cws_jobapplicationid,cws_role,cws_stage)",
+            "$top": 50
+          }
+        },
+        "runAfter": { "Shape_follow_ups": ["Succeeded"] }
+      },
+      "Shape_links": {
+        "type": "Select",
+        "inputs": {
+          "from": "@outputs('Get_links')?['body/value']",
+          "select": {
+            "linkId": "@item()?['cws_contactapplicationid']",
+            "contactId": "@coalesce(item()?['cws_NetworkingContact']?['cws_networkingcontactid'],'')",
+            "contactName": "@coalesce(item()?['cws_NetworkingContact']?['cws_contactname'],'')",
+            "contactEmail": "@coalesce(item()?['cws_NetworkingContact']?['cws_email'],'')",
+            "contactRole": "@coalesce(item()?['cws_NetworkingContact']?['cws_role'],'')",
+            "applicationId": "@coalesce(item()?['cws_JobApplication']?['cws_jobapplicationid'],'')",
+            "applicationRole": "@coalesce(item()?['cws_JobApplication']?['cws_role'],'')"
+          }
+        },
+        "runAfter": { "Get_links": ["Succeeded"] }
+      },
+      "Respond_to_the_agent": {
+        "type": "Response",
+        "kind": "Skills",
+        "inputs": {
+          "statusCode": 200,
+          "body": {
+            "type": "@triggerBody()?['type']",
+            "id": "@triggerBody()?['id']",
+            "record": "@body('Get_record')",
+            "subjectType": "@outputs('Subject')['subjectType']",
+            "interactionCount": "@length(body('Shape_interactions'))",
+            "interactions": "@body('Shape_interactions')",
+            "followUps": "@body('Shape_follow_ups')",
+            "linkedRecords": "@body('Shape_links')"
+          },
+          "schema": {
+            "type": "object",
+            "properties": {
+              "type": { "type": "string" },
+              "id": { "type": "string" },
+              "record": { "type": "object", "description": "The record's own columns, including cws_notes" },
+              "subjectType": { "type": "string" },
+              "interactionCount": { "type": "integer" },
+              "interactions": { "type": "array", "description": "Full interaction history, newest first" },
+              "followUps": { "type": "array" },
+              "linkedRecords": { "type": "array" }
+            }
+          }
+        },
+        "runAfter": { "Shape_links": ["Succeeded"] }
+      }
+    }
+  }
+}

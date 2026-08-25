@@ -1,0 +1,168 @@
+{
+  "name": "Agent — SetFollowUpStatus",
+  "description": "Opens or completes a Follow-Up and keeps the Completed Date correct. Completing stamps today's local date only when the field is empty, so a deliberately backdated completion is never overwritten. Reopening clears it. This is the server-side equivalent of the model-driven form rule, which does not run for API writes.",
+  "definition": {
+    "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+      "$authentication": {
+        "defaultValue": {},
+        "type": "SecureObject"
+      },
+      "$connections": {
+        "defaultValue": {},
+        "type": "Object"
+      }
+    },
+    "triggers": {
+      "When_an_agent_calls_the_flow": {
+        "type": "Request",
+        "kind": "Skills",
+        "inputs": {
+          "schema": {
+            "type": "object",
+            "properties": {
+              "followUpId": {
+                "type": "string",
+                "title": "followUpId"
+              },
+              "status": {
+                "type": "integer",
+                "title": "status",
+                "description": "771670000 Open, 771670001 Completed"
+              },
+              "completedDate": {
+                "type": "string",
+                "title": "completedDate",
+                "description": "Optional local date YYYY-MM-DD to backdate a completion. Ignored when reopening. Optional — pass an empty string when it does not apply; never ask the user for it."
+              }
+            },
+            "required": [
+              "followUpId",
+              "status"
+            ]
+          }
+        }
+      }
+    },
+    "actions": {
+      "Get_current": {
+        "type": "OpenApiConnection",
+        "inputs": {
+          "host": {
+            "connectionName": "shared_commondataserviceforapps",
+            "operationId": "GetItem",
+            "apiId": "/providers/Microsoft.PowerApps/apis/shared_commondataserviceforapps"
+          },
+          "parameters": {
+            "entityName": "cws_followups",
+            "recordId": "@triggerBody()?['followUpId']",
+            "$select": "cws_followupid,cws_title,cws_status,cws_completeddate"
+          }
+        },
+        "runAfter": {}
+      },
+      "Resolve_completed_date": {
+        "type": "Compose",
+        "inputs": {
+          "previousStatus": "@body('Get_current')?['cws_status']",
+          "previousCompletedDate": "@coalesce(body('Get_current')?['cws_completeddate'],'')",
+          "newCompletedDate": "@if(not(equals(string(triggerBody()?['status']),'771670001')), null, if(not(empty(coalesce(triggerBody()?['completedDate'],''))), convertToUtc(concat(triggerBody()?['completedDate'],'T00:00:00'),'Pacific Standard Time'), if(not(empty(coalesce(body('Get_current')?['cws_completeddate'],''))), body('Get_current')?['cws_completeddate'], convertToUtc(concat(convertFromUtc(utcNow(),'Pacific Standard Time','yyyy-MM-dd'),'T00:00:00'),'Pacific Standard Time'))))"
+        },
+        "runAfter": {
+          "Get_current": [
+            "Succeeded"
+          ]
+        }
+      },
+      "Update_follow_up": {
+        "type": "OpenApiConnection",
+        "inputs": {
+          "host": {
+            "connectionName": "shared_commondataserviceforapps",
+            "operationId": "UpdateRecord",
+            "apiId": "/providers/Microsoft.PowerApps/apis/shared_commondataserviceforapps"
+          },
+          "parameters": {
+            "entityName": "cws_followups",
+            "recordId": "@triggerBody()?['followUpId']",
+            "item/cws_status": "@int(triggerBody()?['status'])",
+            "item/cws_completeddate": "@outputs('Resolve_completed_date')['newCompletedDate']"
+          }
+        },
+        "runAfter": {
+          "Resolve_completed_date": [
+            "Succeeded"
+          ]
+        }
+      },
+      "Read_back": {
+        "type": "OpenApiConnection",
+        "inputs": {
+          "host": {
+            "connectionName": "shared_commondataserviceforapps",
+            "operationId": "GetItem",
+            "apiId": "/providers/Microsoft.PowerApps/apis/shared_commondataserviceforapps"
+          },
+          "parameters": {
+            "entityName": "cws_followups",
+            "recordId": "@triggerBody()?['followUpId']",
+            "$select": "cws_followupid,cws_title,cws_status,cws_completeddate,cws_duedate"
+          }
+        },
+        "runAfter": {
+          "Update_follow_up": [
+            "Succeeded"
+          ]
+        }
+      },
+      "Respond_to_the_agent": {
+        "type": "Response",
+        "kind": "Skills",
+        "inputs": {
+          "statusCode": 200,
+          "body": {
+            "id": "@triggerBody()?['followUpId']",
+            "title": "@body('Read_back')?['cws_title']",
+            "previousStatus": "@outputs('Resolve_completed_date')['previousStatus']",
+            "status": "@body('Read_back')?['cws_status']",
+            "statusLabel": "@if(equals(body('Read_back')?['cws_status'],771670001),'Completed','Open')",
+            "completedDate": "@if(empty(coalesce(body('Read_back')?['cws_completeddate'],'')),'',convertFromUtc(body('Read_back')?['cws_completeddate'],'Pacific Standard Time','yyyy-MM-dd'))",
+            "dueDate": "@if(empty(coalesce(body('Read_back')?['cws_duedate'],'')),'',convertFromUtc(body('Read_back')?['cws_duedate'],'Pacific Standard Time','yyyy-MM-dd'))"
+          },
+          "schema": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "title": {
+                "type": "string"
+              },
+              "previousStatus": {
+                "type": "integer"
+              },
+              "status": {
+                "type": "integer"
+              },
+              "statusLabel": {
+                "type": "string"
+              },
+              "completedDate": {
+                "type": "string"
+              },
+              "dueDate": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        "runAfter": {
+          "Read_back": [
+            "Succeeded"
+          ]
+        }
+      }
+    }
+  }
+}

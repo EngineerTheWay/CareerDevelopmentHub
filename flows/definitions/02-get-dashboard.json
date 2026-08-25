@@ -1,0 +1,351 @@
+{
+  "name": "Agent — GetDashboard",
+  "description": "Returns the Career Development Hub dashboard: open follow-ups bucketed into overdue / due soon / upcoming, active job applications, stalled applications, recent interactions, and today's calendar events. Overdue means an open follow-up dated before today. Due soon covers today through the next 7 days. Stalled means an open application with no update for 21 days. All date bucketing is done on local calendar dates, never with OData date filters.",
+  "definition": {
+    "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+      "$authentication": {
+        "defaultValue": {},
+        "type": "SecureObject"
+      },
+      "$connections": {
+        "defaultValue": {},
+        "type": "Object"
+      }
+    },
+    "triggers": {
+      "When_an_agent_calls_the_flow": {
+        "type": "Request",
+        "kind": "Skills",
+        "inputs": {
+          "schema": {
+            "type": "object",
+            "properties": {
+              "dueSoonDays": {
+                "type": "integer",
+                "title": "dueSoonDays",
+                "description": "How many days ahead counts as due soon. Defaults to 7. Pass the word none to use the default — never ask the user for this; only send a number if they explicitly asked for one."
+              },
+              "stalledDays": {
+                "type": "integer",
+                "title": "stalledDays",
+                "description": "Days without an update before an open application is stalled. Defaults to 21. Pass the word none to use the default — never ask the user for this; only send a number if they explicitly asked for one."
+              }
+            },
+            "required": [
+              "dueSoonDays",
+              "stalledDays"
+            ]
+          }
+        }
+      }
+    },
+    "actions": {
+      "Window": {
+        "type": "Compose",
+        "inputs": {
+          "today": "@convertFromUtc(utcNow(),'Pacific Standard Time','yyyy-MM-dd')",
+          "dueSoonEnd": "@convertFromUtc(addDays(utcNow(), if(or(empty(coalesce(triggerBody()?['dueSoonDays'],'')),equals(toLower(string(triggerBody()?['dueSoonDays'])),'none')),7,int(triggerBody()?['dueSoonDays']))),'Pacific Standard Time','yyyy-MM-dd')",
+          "stalledBefore": "@convertFromUtc(addDays(utcNow(), mul(-1, if(or(empty(coalesce(triggerBody()?['stalledDays'],'')),equals(toLower(string(triggerBody()?['stalledDays'])),'none')),21,int(triggerBody()?['stalledDays'])))),'Pacific Standard Time','yyyy-MM-dd')",
+          "startUtc": "@convertToUtc(concat(convertFromUtc(utcNow(),'Pacific Standard Time','yyyy-MM-dd'),'T00:00:00'),'Pacific Standard Time')",
+          "endUtc": "@convertToUtc(concat(convertFromUtc(utcNow(),'Pacific Standard Time','yyyy-MM-dd'),'T23:59:59'),'Pacific Standard Time')"
+        },
+        "runAfter": {}
+      },
+      "Get_open_follow_ups": {
+        "type": "OpenApiConnection",
+        "inputs": {
+          "host": {
+            "connectionName": "shared_commondataserviceforapps",
+            "operationId": "ListRecords",
+            "apiId": "/providers/Microsoft.PowerApps/apis/shared_commondataserviceforapps"
+          },
+          "parameters": {
+            "entityName": "cws_followups",
+            "$select": "cws_followupid,cws_title,cws_duedate,cws_relatedtype,cws_notes",
+            "$filter": "statecode eq 0 and cws_status eq 771670000",
+            "$expand": "cws_RelatedContact($select=cws_contactname;$expand=cws_Company($select=cws_companyname)),cws_RelatedApplication($select=cws_role;$expand=cws_Company($select=cws_companyname))",
+            "$orderby": "cws_duedate asc",
+            "$top": 200
+          }
+        },
+        "runAfter": {
+          "Window": [
+            "Succeeded"
+          ]
+        }
+      },
+      "Shape_follow_ups": {
+        "type": "Select",
+        "inputs": {
+          "from": "@outputs('Get_open_follow_ups')?['body/value']",
+          "select": {
+            "id": "@item()?['cws_followupid']",
+            "title": "@item()?['cws_title']",
+            "dueDate": "@if(empty(coalesce(item()?['cws_duedate'],'')),'',convertFromUtc(item()?['cws_duedate'],'Pacific Standard Time','yyyy-MM-dd'))",
+            "relatedType": "@item()?['cws_relatedtype']",
+            "label": "@coalesce(item()?['cws_RelatedApplication']?['cws_role'], item()?['cws_RelatedContact']?['cws_contactname'], '')",
+            "company": "@coalesce(item()?['cws_RelatedApplication']?['cws_Company']?['cws_companyname'], item()?['cws_RelatedContact']?['cws_Company']?['cws_companyname'], '')",
+            "notes": "@coalesce(item()?['cws_notes'],'')"
+          }
+        },
+        "runAfter": {
+          "Get_open_follow_ups": [
+            "Succeeded"
+          ]
+        }
+      },
+      "Overdue": {
+        "type": "Query",
+        "inputs": {
+          "from": "@body('Shape_follow_ups')",
+          "where": "@and(not(empty(item()?['dueDate'])), less(item()?['dueDate'], outputs('Window')['today']))"
+        },
+        "runAfter": {
+          "Shape_follow_ups": [
+            "Succeeded"
+          ]
+        }
+      },
+      "Due_soon": {
+        "type": "Query",
+        "inputs": {
+          "from": "@body('Shape_follow_ups')",
+          "where": "@and(greaterOrEquals(coalesce(item()?['dueDate'],'9999-12-31'), outputs('Window')['today']), lessOrEquals(coalesce(item()?['dueDate'],'9999-12-31'), outputs('Window')['dueSoonEnd']))"
+        },
+        "runAfter": {
+          "Overdue": [
+            "Succeeded"
+          ]
+        }
+      },
+      "Upcoming": {
+        "type": "Query",
+        "inputs": {
+          "from": "@body('Shape_follow_ups')",
+          "where": "@greater(coalesce(item()?['dueDate'],'9999-12-31'), outputs('Window')['dueSoonEnd'])"
+        },
+        "runAfter": {
+          "Due_soon": [
+            "Succeeded"
+          ]
+        }
+      },
+      "Get_active_applications": {
+        "type": "OpenApiConnection",
+        "inputs": {
+          "host": {
+            "connectionName": "shared_commondataserviceforapps",
+            "operationId": "ListRecords",
+            "apiId": "/providers/Microsoft.PowerApps/apis/shared_commondataserviceforapps"
+          },
+          "parameters": {
+            "entityName": "cws_jobapplications",
+            "$select": "cws_jobapplicationid,cws_role,cws_stage,cws_dateapplied,cws_nextstep,cws_jobid,modifiedon",
+            "$filter": "statecode eq 0 and cws_stage ne 771670004",
+            "$expand": "cws_Company($select=cws_companyname),cws_BusinessGroup($select=cws_businessgroupname)",
+            "$orderby": "modifiedon desc",
+            "$top": 200
+          }
+        },
+        "runAfter": {
+          "Upcoming": [
+            "Succeeded"
+          ]
+        }
+      },
+      "Shape_applications": {
+        "type": "Select",
+        "inputs": {
+          "from": "@outputs('Get_active_applications')?['body/value']",
+          "select": {
+            "id": "@item()?['cws_jobapplicationid']",
+            "role": "@item()?['cws_role']",
+            "stage": "@item()?['cws_stage']",
+            "stageLabel": "@if(equals(item()?['cws_stage'],771670000),'Researching',if(equals(item()?['cws_stage'],771670001),'Applied',if(equals(item()?['cws_stage'],771670002),'Interviewing',if(equals(item()?['cws_stage'],771670003),'Offer','Closed'))))",
+            "company": "@coalesce(item()?['cws_Company']?['cws_companyname'],'')",
+            "businessGroup": "@coalesce(item()?['cws_BusinessGroup']?['cws_businessgroupname'],'')",
+            "dateApplied": "@if(empty(coalesce(item()?['cws_dateapplied'],'')),'',convertFromUtc(item()?['cws_dateapplied'],'Pacific Standard Time','yyyy-MM-dd'))",
+            "nextStep": "@coalesce(item()?['cws_nextstep'],'')",
+            "lastUpdated": "@convertFromUtc(item()?['modifiedon'],'Pacific Standard Time','yyyy-MM-dd')"
+          }
+        },
+        "runAfter": {
+          "Get_active_applications": [
+            "Succeeded"
+          ]
+        }
+      },
+      "Stalled_applications": {
+        "type": "Query",
+        "inputs": {
+          "from": "@body('Shape_applications')",
+          "where": "@less(item()?['lastUpdated'], outputs('Window')['stalledBefore'])"
+        },
+        "runAfter": {
+          "Shape_applications": [
+            "Succeeded"
+          ]
+        }
+      },
+      "Get_recent_interactions": {
+        "type": "OpenApiConnection",
+        "inputs": {
+          "host": {
+            "connectionName": "shared_commondataserviceforapps",
+            "operationId": "ListRecords",
+            "apiId": "/providers/Microsoft.PowerApps/apis/shared_commondataserviceforapps"
+          },
+          "parameters": {
+            "entityName": "cws_interactions",
+            "$select": "cws_interactionid,cws_interactionname,cws_interactiondate,cws_interactiontype,cws_notes",
+            "$filter": "statecode eq 0",
+            "$expand": "cws_Contact($select=cws_contactname),cws_RelatedApplication($select=cws_role)",
+            "$orderby": "cws_interactiondate desc",
+            "$top": 10
+          }
+        },
+        "runAfter": {
+          "Stalled_applications": [
+            "Succeeded"
+          ]
+        }
+      },
+      "Shape_interactions": {
+        "type": "Select",
+        "inputs": {
+          "from": "@outputs('Get_recent_interactions')?['body/value']",
+          "select": {
+            "id": "@item()?['cws_interactionid']",
+            "name": "@coalesce(item()?['cws_interactionname'],'')",
+            "date": "@if(empty(coalesce(item()?['cws_interactiondate'],'')),'',convertFromUtc(item()?['cws_interactiondate'],'Pacific Standard Time','yyyy-MM-dd'))",
+            "contact": "@coalesce(item()?['cws_Contact']?['cws_contactname'],'')",
+            "application": "@coalesce(item()?['cws_RelatedApplication']?['cws_role'],'')",
+            "notes": "@coalesce(item()?['cws_notes'],'')"
+          }
+        },
+        "runAfter": {
+          "Get_recent_interactions": [
+            "Succeeded"
+          ]
+        }
+      },
+      "Respond_to_the_agent": {
+        "type": "Response",
+        "kind": "Skills",
+        "inputs": {
+          "statusCode": 200,
+          "body": {
+            "today": "@outputs('Window')['today']",
+            "overdueCount": "@length(body('Overdue'))",
+            "dueSoonCount": "@length(body('Due_soon'))",
+            "upcomingCount": "@length(body('Upcoming'))",
+            "activeApplicationCount": "@length(body('Shape_applications'))",
+            "stalledCount": "@length(body('Stalled_applications'))",
+            "overdue": "@body('Overdue')",
+            "dueSoon": "@body('Due_soon')",
+            "upcoming": "@body('Upcoming')",
+            "activeApplications": "@body('Shape_applications')",
+            "stalledApplications": "@body('Stalled_applications')",
+            "recentInteractions": "@body('Shape_interactions')",
+            "eventCount": "@length(body('Shape_events'))",
+            "todaysEvents": "@body('Shape_events')"
+          },
+          "schema": {
+            "type": "object",
+            "properties": {
+              "today": {
+                "type": "string"
+              },
+              "overdueCount": {
+                "type": "integer"
+              },
+              "dueSoonCount": {
+                "type": "integer"
+              },
+              "upcomingCount": {
+                "type": "integer"
+              },
+              "activeApplicationCount": {
+                "type": "integer"
+              },
+              "stalledCount": {
+                "type": "integer"
+              },
+              "overdue": {
+                "type": "array"
+              },
+              "dueSoon": {
+                "type": "array"
+              },
+              "upcoming": {
+                "type": "array"
+              },
+              "activeApplications": {
+                "type": "array"
+              },
+              "stalledApplications": {
+                "type": "array"
+              },
+              "recentInteractions": {
+                "type": "array"
+              },
+              "eventCount": {
+                "type": "integer"
+              },
+              "todaysEvents": {
+                "type": "array",
+                "description": "Calendar events for today, times already in local time"
+              }
+            }
+          }
+        },
+        "runAfter": {
+          "Shape_events": [
+            "Succeeded"
+          ]
+        }
+      },
+      "Get_todays_events": {
+        "type": "OpenApiConnection",
+        "inputs": {
+          "host": {
+            "connectionName": "shared_office365",
+            "operationId": "GetEventsCalendarViewV3",
+            "apiId": "/providers/Microsoft.PowerApps/apis/shared_office365"
+          },
+          "parameters": {
+            "calendarId": "Calendar",
+            "startDateTimeUtc": "@{outputs('Window')['startUtc']}",
+            "endDateTimeUtc": "@{outputs('Window')['endUtc']}",
+            "$orderby": "start/dateTime asc"
+          }
+        },
+        "runAfter": {
+          "Shape_interactions": [
+            "Succeeded"
+          ]
+        }
+      },
+      "Shape_events": {
+        "type": "Select",
+        "inputs": {
+          "from": "@outputs('Get_todays_events')?['body/value']",
+          "select": {
+            "subject": "@coalesce(item()?['subject'],'')",
+            "start": "@if(equals(item()?['isAllDay'],true),'All day',convertTimeZone(item()?['start'],'UTC','Pacific Standard Time','h:mm tt'))",
+            "end": "@if(equals(item()?['isAllDay'],true),'All day',convertTimeZone(item()?['end'],'UTC','Pacific Standard Time','h:mm tt'))",
+            "location": "@coalesce(item()?['location'],'')",
+            "organizer": "@coalesce(item()?['organizer'],'')"
+          }
+        },
+        "runAfter": {
+          "Get_todays_events": [
+            "Succeeded"
+          ]
+        }
+      }
+    }
+  }
+}

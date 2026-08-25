@@ -1,0 +1,121 @@
+{
+  "name": "Agent — ListDrafts",
+  "description": "Lists email drafts currently sitting in the user's Outlook Drafts folder, newest first, with the full body of each. Use this when the user refers to a draft you did not create in this conversation — for example a draft from an earlier session or one they wrote themselves — so you can recover its draftId before calling UpdateDraft or SendDraft.",
+  "definition": {
+    "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+      "$authentication": {
+        "defaultValue": {},
+        "type": "SecureObject"
+      },
+      "$connections": {
+        "defaultValue": {},
+        "type": "Object"
+      }
+    },
+    "triggers": {
+      "When_an_agent_calls_the_flow": {
+        "type": "Request",
+        "kind": "Skills",
+        "inputs": {
+          "schema": {
+            "type": "object",
+            "properties": {
+              "subjectContains": {
+                "type": "string",
+                "title": "subjectContains",
+                "description": "Narrows the list to drafts whose subject contains this text. Pass the word none to list all recent drafts — never ask the user for this."
+              }
+            },
+            "required": [
+              "subjectContains"
+            ]
+          }
+        }
+      }
+    },
+    "actions": {
+      "Filter_text": {
+        "type": "Compose",
+        "inputs": "@if(or(empty(coalesce(triggerBody()?['subjectContains'],'')),equals(toLower(trim(string(triggerBody()?['subjectContains']))),'none')),'',triggerBody()?['subjectContains'])",
+        "runAfter": {}
+      },
+      "Get_drafts": {
+        "type": "OpenApiConnection",
+        "inputs": {
+          "host": {
+            "connectionName": "shared_office365",
+            "operationId": "GetEmailsV3",
+            "apiId": "/providers/Microsoft.PowerApps/apis/shared_office365"
+          },
+          "parameters": {
+            "folderPath": "Drafts",
+            "subjectFilter": "@outputs('Filter_text')",
+            "fetchOnlyUnread": false,
+            "includeAttachments": false,
+            "importance": "Any",
+            "top": 15
+          }
+        },
+        "runAfter": {
+          "Filter_text": [
+            "Succeeded"
+          ]
+        }
+      },
+      "Shape_drafts": {
+        "type": "Select",
+        "inputs": {
+          "from": "@outputs('Get_drafts')?['body/value']",
+          "select": {
+            "draftId": "@item()?['id']",
+            "subject": "@coalesce(item()?['subject'],'(no subject)')",
+            "to": "@coalesce(item()?['toRecipients'], item()?['to'], '')",
+            "cc": "@coalesce(item()?['ccRecipients'], item()?['cc'], '')",
+            "modified": "@if(empty(coalesce(item()?['lastModifiedDateTime'],item()?['receivedDateTime'],'')),'',convertTimeZone(coalesce(item()?['lastModifiedDateTime'],item()?['receivedDateTime']),'UTC','Pacific Standard Time','yyyy-MM-dd HH:mm'))",
+            "body": "@replace(replace(coalesce(item()?['body'],''),'<br>',decodeUriComponent('%0A')),'<br/>',decodeUriComponent('%0A'))",
+            "preview": "@coalesce(item()?['bodyPreview'],'')"
+          }
+        },
+        "runAfter": {
+          "Get_drafts": [
+            "Succeeded"
+          ]
+        }
+      },
+      "Respond_to_the_agent": {
+        "type": "Response",
+        "kind": "Skills",
+        "inputs": {
+          "statusCode": 200,
+          "body": {
+            "draftCount": "@length(body('Shape_drafts'))",
+            "drafts": "@body('Shape_drafts')",
+            "message": "@if(equals(length(body('Shape_drafts')),0),'No matching drafts are in the Drafts folder.','Show the user which draft you mean and confirm before updating or sending it.')"
+          },
+          "schema": {
+            "type": "object",
+            "properties": {
+              "draftCount": {
+                "type": "integer"
+              },
+              "drafts": {
+                "type": "array",
+                "description": "Each with draftId, subject, to, cc, modified, a plain-text preview, and the full body. The body may contain HTML — never show it raw to the user; summarise or reformat it."
+              },
+              "message": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        "runAfter": {
+          "Shape_drafts": [
+            "Succeeded"
+          ]
+        }
+      }
+    }
+  }
+}

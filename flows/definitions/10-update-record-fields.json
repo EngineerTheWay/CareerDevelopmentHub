@@ -1,0 +1,151 @@
+{
+  "name": "Agent — UpdateRecordFields",
+  "description": "Updates ordinary scalar fields on a Contact, Job Application, Follow-Up or Interaction. Pass fields as a JSON object string mapping logical column names to their new values — for example an object setting cws_city to Denver and cws_nextstep to Await reply. Refuses any write to a notes field (use AppendNotes) or to cws_stage (use UpdateApplicationStage), so neither can be clobbered by accident.",
+  "definition": {
+    "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+      "$authentication": {
+        "defaultValue": {},
+        "type": "SecureObject"
+      },
+      "$connections": {
+        "defaultValue": {},
+        "type": "Object"
+      }
+    },
+    "triggers": {
+      "When_an_agent_calls_the_flow": {
+        "type": "Request",
+        "kind": "Skills",
+        "inputs": {
+          "schema": {
+            "type": "object",
+            "properties": {
+              "table": {
+                "type": "string",
+                "title": "table",
+                "description": "One of: contact, application, followUp, interaction"
+              },
+              "recordId": {
+                "type": "string",
+                "title": "recordId"
+              },
+              "fields": {
+                "type": "string",
+                "title": "fields",
+                "description": "Pass fields as a JSON object string mapping logical column names to their new values — for example an object setting cws_city to Denver and cws_nextstep to Await reply. Never include cws_notes or cws_stage."
+              }
+            },
+            "required": [
+              "table",
+              "recordId",
+              "fields"
+            ]
+          }
+        }
+      }
+    },
+    "actions": {
+      "Meta": {
+        "type": "Compose",
+        "inputs": {
+          "tableSet": "@if(equals(triggerBody()?['table'],'contact'),'cws_networkingcontacts',if(equals(triggerBody()?['table'],'application'),'cws_jobapplications',if(equals(triggerBody()?['table'],'followUp'),'cws_followups','cws_interactions')))"
+        },
+        "runAfter": {}
+      },
+      "Guard": {
+        "type": "Compose",
+        "inputs": {
+          "touchesNotes": "@contains(toLower(string(triggerBody()?['fields'])),'cws_notes')",
+          "touchesStage": "@contains(toLower(string(triggerBody()?['fields'])),'cws_stage')",
+          "blocked": "@or(contains(toLower(string(triggerBody()?['fields'])),'cws_notes'), contains(toLower(string(triggerBody()?['fields'])),'cws_stage'))"
+        },
+        "runAfter": {
+          "Meta": [
+            "Succeeded"
+          ]
+        }
+      },
+      "Apply_update": {
+        "type": "If",
+        "expression": {
+          "and": [
+            {
+              "equals": [
+                "@outputs('Guard')['blocked']",
+                false
+              ]
+            }
+          ]
+        },
+        "actions": {
+          "Update_record": {
+            "type": "OpenApiConnection",
+            "inputs": {
+              "host": {
+                "connectionName": "shared_commondataserviceforapps",
+                "operationId": "UpdateRecord",
+                "apiId": "/providers/Microsoft.PowerApps/apis/shared_commondataserviceforapps"
+              },
+              "parameters": {
+                "entityName": "@outputs('Meta')['tableSet']",
+                "recordId": "@triggerBody()?['recordId']",
+                "item": "@json(triggerBody()?['fields'])"
+              }
+            },
+            "runAfter": {}
+          }
+        },
+        "else": {
+          "actions": {}
+        },
+        "runAfter": {
+          "Guard": [
+            "Succeeded"
+          ]
+        }
+      },
+      "Respond_to_the_agent": {
+        "type": "Response",
+        "kind": "Skills",
+        "inputs": {
+          "statusCode": 200,
+          "body": {
+            "recordId": "@triggerBody()?['recordId']",
+            "table": "@triggerBody()?['table']",
+            "updated": "@not(outputs('Guard')['blocked'])",
+            "fieldsApplied": "@if(outputs('Guard')['blocked'],'',string(triggerBody()?['fields']))",
+            "message": "@if(outputs('Guard')['touchesNotes'],'Refused: notes must be written with AppendNotes so existing content is preserved.',if(outputs('Guard')['touchesStage'],'Refused: stage must be changed with UpdateApplicationStage so the close guard applies.','Fields updated.'))"
+          },
+          "schema": {
+            "type": "object",
+            "properties": {
+              "recordId": {
+                "type": "string"
+              },
+              "table": {
+                "type": "string"
+              },
+              "updated": {
+                "type": "boolean",
+                "description": "False when the write was refused"
+              },
+              "fieldsApplied": {
+                "type": "string"
+              },
+              "message": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        "runAfter": {
+          "Apply_update": [
+            "Succeeded"
+          ]
+        }
+      }
+    }
+  }
+}

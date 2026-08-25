@@ -1,0 +1,194 @@
+{
+  "name": "Agent — UpdateApplicationStage",
+  "description": "Moves a Job Application to a new stage and reports the previous stage so the change can be stated accurately. Moving to Closed is refused unless confirmClosed is true — always confirm a close with the user first, then call again with confirmClosed set.",
+  "definition": {
+    "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+      "$authentication": {
+        "defaultValue": {},
+        "type": "SecureObject"
+      },
+      "$connections": {
+        "defaultValue": {},
+        "type": "Object"
+      }
+    },
+    "triggers": {
+      "When_an_agent_calls_the_flow": {
+        "type": "Request",
+        "kind": "Skills",
+        "inputs": {
+          "schema": {
+            "type": "object",
+            "properties": {
+              "applicationId": {
+                "type": "string",
+                "title": "applicationId",
+                "description": "Job Application GUID from ResolveRecord"
+              },
+              "stage": {
+                "type": "integer",
+                "title": "stage",
+                "description": "771670000 Researching, 771670001 Applied, 771670002 Interviewing, 771670003 Offer, 771670004 Closed"
+              },
+              "confirmClosed": {
+                "type": "boolean",
+                "title": "confirmClosed",
+                "description": "Set to true only when moving to Closed and the user has explicitly confirmed the close. Optional — pass an empty string when it does not apply; never ask the user for it."
+              }
+            },
+            "required": [
+              "applicationId",
+              "stage"
+            ]
+          }
+        }
+      }
+    },
+    "actions": {
+      "Get_current": {
+        "type": "OpenApiConnection",
+        "inputs": {
+          "host": {
+            "connectionName": "shared_commondataserviceforapps",
+            "operationId": "GetItem",
+            "apiId": "/providers/Microsoft.PowerApps/apis/shared_commondataserviceforapps"
+          },
+          "parameters": {
+            "entityName": "cws_jobapplications",
+            "recordId": "@triggerBody()?['applicationId']",
+            "$select": "cws_jobapplicationid,cws_role,cws_stage",
+            "$expand": "cws_Company($select=cws_companyname)"
+          }
+        },
+        "runAfter": {}
+      },
+      "Guard": {
+        "type": "Compose",
+        "inputs": {
+          "previousStage": "@body('Get_current')?['cws_stage']",
+          "isClosing": "@equals(string(triggerBody()?['stage']),'771670004')",
+          "confirmed": "@equals(toLower(string(coalesce(triggerBody()?['confirmClosed'],'false'))),'true')",
+          "blocked": "@and(equals(string(triggerBody()?['stage']),'771670004'), not(equals(toLower(string(coalesce(triggerBody()?['confirmClosed'],'false'))),'true')))"
+        },
+        "runAfter": {
+          "Get_current": [
+            "Succeeded"
+          ]
+        }
+      },
+      "Apply_stage": {
+        "type": "If",
+        "expression": {
+          "and": [
+            {
+              "equals": [
+                "@outputs('Guard')['blocked']",
+                false
+              ]
+            }
+          ]
+        },
+        "actions": {
+          "Update_stage": {
+            "type": "OpenApiConnection",
+            "inputs": {
+              "host": {
+                "connectionName": "shared_commondataserviceforapps",
+                "operationId": "UpdateRecord",
+                "apiId": "/providers/Microsoft.PowerApps/apis/shared_commondataserviceforapps"
+              },
+              "parameters": {
+                "entityName": "cws_jobapplications",
+                "recordId": "@triggerBody()?['applicationId']",
+                "item/cws_stage": "@int(triggerBody()?['stage'])"
+              }
+            },
+            "runAfter": {}
+          }
+        },
+        "else": {
+          "actions": {}
+        },
+        "runAfter": {
+          "Guard": [
+            "Succeeded"
+          ]
+        }
+      },
+      "Read_back": {
+        "type": "OpenApiConnection",
+        "inputs": {
+          "host": {
+            "connectionName": "shared_commondataserviceforapps",
+            "operationId": "GetItem",
+            "apiId": "/providers/Microsoft.PowerApps/apis/shared_commondataserviceforapps"
+          },
+          "parameters": {
+            "entityName": "cws_jobapplications",
+            "recordId": "@triggerBody()?['applicationId']",
+            "$select": "cws_jobapplicationid,cws_role,cws_stage"
+          }
+        },
+        "runAfter": {
+          "Apply_stage": [
+            "Succeeded"
+          ]
+        }
+      },
+      "Respond_to_the_agent": {
+        "type": "Response",
+        "kind": "Skills",
+        "inputs": {
+          "statusCode": 200,
+          "body": {
+            "id": "@triggerBody()?['applicationId']",
+            "role": "@body('Read_back')?['cws_role']",
+            "company": "@coalesce(body('Get_current')?['cws_Company']?['cws_companyname'],'')",
+            "previousStage": "@outputs('Guard')['previousStage']",
+            "stage": "@body('Read_back')?['cws_stage']",
+            "stageLabel": "@if(equals(body('Read_back')?['cws_stage'],771670000),'Researching',if(equals(body('Read_back')?['cws_stage'],771670001),'Applied',if(equals(body('Read_back')?['cws_stage'],771670002),'Interviewing',if(equals(body('Read_back')?['cws_stage'],771670003),'Offer','Closed'))))",
+            "updated": "@not(outputs('Guard')['blocked'])",
+            "message": "@if(outputs('Guard')['blocked'],'Refused: moving this application to Closed needs confirmClosed=true. Confirm with the user first.','Stage updated.')"
+          },
+          "schema": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "role": {
+                "type": "string"
+              },
+              "company": {
+                "type": "string"
+              },
+              "previousStage": {
+                "type": "integer"
+              },
+              "stage": {
+                "type": "integer"
+              },
+              "stageLabel": {
+                "type": "string"
+              },
+              "updated": {
+                "type": "boolean",
+                "description": "False when the change was refused"
+              },
+              "message": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        "runAfter": {
+          "Read_back": [
+            "Succeeded"
+          ]
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,270 @@
+{
+  "name": "Agent — CreateApplication",
+  "description": "Creates a Job Application. Role, Company and Stage are required; resolve the Company with ResolveRecord first and pass its GUID. Business Group is associated as a separate step and is never created. Date Applied is stored at local midnight so it matches the app's date picker.",
+  "definition": {
+    "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+      "$authentication": {
+        "defaultValue": {},
+        "type": "SecureObject"
+      },
+      "$connections": {
+        "defaultValue": {},
+        "type": "Object"
+      }
+    },
+    "triggers": {
+      "When_an_agent_calls_the_flow": {
+        "type": "Request",
+        "kind": "Skills",
+        "inputs": {
+          "schema": {
+            "type": "object",
+            "properties": {
+              "role": {
+                "type": "string",
+                "title": "role",
+                "description": "Position title"
+              },
+              "companyId": {
+                "type": "string",
+                "title": "companyId",
+                "description": "Company GUID from ResolveRecord"
+              },
+              "stage": {
+                "type": "integer",
+                "title": "stage",
+                "description": "771670000 Researching, 771670001 Applied, 771670002 Interviewing, 771670003 Offer, 771670004 Closed"
+              },
+              "businessGroupId": {
+                "type": "string",
+                "title": "businessGroupId",
+                "description": "Business Group GUID from ResolveRecord. Search only — Business Groups are never created. Pass the word none when it does not apply — never ask the user for this."
+              },
+              "dateApplied": {
+                "type": "string",
+                "title": "dateApplied",
+                "description": "Local calendar date as YYYY-MM-DD Pass the word none when it does not apply — never ask the user for this."
+              },
+              "jobId": {
+                "type": "string",
+                "title": "jobId",
+                "description": "Optional — pass an empty string when it does not apply; never ask the user for it. Pass the word none when it does not apply — never ask the user for this."
+              },
+              "jobLink": {
+                "type": "string",
+                "title": "jobLink",
+                "description": "Optional — pass an empty string when it does not apply; never ask the user for it. Pass the word none when it does not apply — never ask the user for this."
+              },
+              "city": {
+                "type": "string",
+                "title": "city",
+                "description": "Optional — pass an empty string when it does not apply; never ask the user for it. Pass the word none when it does not apply — never ask the user for this."
+              },
+              "arrangement": {
+                "type": "integer",
+                "title": "arrangement",
+                "description": "771670000 Remote, 771670001 On-site, 771670002 Hybrid Pass the word none when it does not apply — never ask the user for this."
+              },
+              "nextStep": {
+                "type": "string",
+                "title": "nextStep",
+                "description": "Optional — pass an empty string when it does not apply; never ask the user for it. Pass the word none when it does not apply — never ask the user for this."
+              },
+              "notes": {
+                "type": "string",
+                "title": "notes",
+                "description": "Optional — pass an empty string when it does not apply; never ask the user for it. Pass the word none when it does not apply — never ask the user for this."
+              }
+            },
+            "required": [
+              "role",
+              "companyId",
+              "stage",
+              "businessGroupId",
+              "dateApplied",
+              "jobId",
+              "jobLink",
+              "city",
+              "arrangement",
+              "nextStep",
+              "notes"
+            ]
+          }
+        }
+      }
+    },
+    "actions": {
+      "Create_application": {
+        "type": "OpenApiConnection",
+        "inputs": {
+          "host": {
+            "connectionName": "shared_commondataserviceforapps",
+            "operationId": "CreateRecord",
+            "apiId": "/providers/Microsoft.PowerApps/apis/shared_commondataserviceforapps"
+          },
+          "parameters": {
+            "entityName": "cws_jobapplications",
+            "item/cws_role": "@trim(triggerBody()?['role'])",
+            "item/cws_Company@odata.bind": "@concat('/cws_companies(', triggerBody()?['companyId'], ')')",
+            "item/cws_stage": "@int(triggerBody()?['stage'])",
+            "item/cws_dateapplied": "@if(or(empty(coalesce(triggerBody()?['dateApplied'],'')),equals(toLower(trim(string(triggerBody()?['dateApplied']))),'none')), null, convertToUtc(concat(triggerBody()?['dateApplied'],'T00:00:00'),'Pacific Standard Time'))",
+            "item/cws_jobid": "@if(equals(toLower(trim(coalesce(triggerBody()?['jobId'],''))),'none'),'',coalesce(triggerBody()?['jobId'],''))",
+            "item/cws_joblink": "@if(equals(toLower(trim(coalesce(triggerBody()?['jobLink'],''))),'none'),'',coalesce(triggerBody()?['jobLink'],''))",
+            "item/cws_city": "@if(equals(toLower(trim(coalesce(triggerBody()?['city'],''))),'none'),'',coalesce(triggerBody()?['city'],''))",
+            "item/cws_nextstep": "@if(equals(toLower(trim(coalesce(triggerBody()?['nextStep'],''))),'none'),'',coalesce(triggerBody()?['nextStep'],''))",
+            "item/cws_notes": "@if(equals(toLower(trim(coalesce(triggerBody()?['notes'],''))),'none'),'',coalesce(triggerBody()?['notes'],''))"
+          }
+        },
+        "runAfter": {}
+      },
+      "Set_arrangement": {
+        "type": "If",
+        "expression": {
+          "and": [
+            {
+              "equals": [
+                "@if(or(empty(coalesce(triggerBody()?['arrangement'],'')),equals(toLower(trim(string(triggerBody()?['arrangement']))),'none')),'skip','set')",
+                "set"
+              ]
+            }
+          ]
+        },
+        "actions": {
+          "Apply_arrangement": {
+            "type": "OpenApiConnection",
+            "inputs": {
+              "host": {
+                "connectionName": "shared_commondataserviceforapps",
+                "operationId": "UpdateRecord",
+                "apiId": "/providers/Microsoft.PowerApps/apis/shared_commondataserviceforapps"
+              },
+              "parameters": {
+                "entityName": "cws_jobapplications",
+                "recordId": "@body('Create_application')?['cws_jobapplicationid']",
+                "item/cws_arrangement": "@int(triggerBody()?['arrangement'])"
+              }
+            },
+            "runAfter": {}
+          }
+        },
+        "else": {
+          "actions": {}
+        },
+        "runAfter": {
+          "Create_application": [
+            "Succeeded"
+          ]
+        }
+      },
+      "Associate_business_group": {
+        "type": "If",
+        "expression": {
+          "and": [
+            {
+              "equals": [
+                "@if(or(empty(coalesce(triggerBody()?['businessGroupId'],'')),equals(toLower(string(triggerBody()?['businessGroupId'])),'none')),'skip','bind')",
+                "bind"
+              ]
+            }
+          ]
+        },
+        "actions": {
+          "Set_business_group": {
+            "type": "OpenApiConnection",
+            "inputs": {
+              "host": {
+                "connectionName": "shared_commondataserviceforapps",
+                "operationId": "UpdateRecord",
+                "apiId": "/providers/Microsoft.PowerApps/apis/shared_commondataserviceforapps"
+              },
+              "parameters": {
+                "entityName": "cws_jobapplications",
+                "recordId": "@body('Create_application')?['cws_jobapplicationid']",
+                "item/cws_BusinessGroup@odata.bind": "@concat('/cws_businessgroups(', triggerBody()?['businessGroupId'], ')')"
+              }
+            },
+            "runAfter": {}
+          }
+        },
+        "else": {
+          "actions": {}
+        },
+        "runAfter": {
+          "Set_arrangement": [
+            "Succeeded"
+          ]
+        }
+      },
+      "Read_back": {
+        "type": "OpenApiConnection",
+        "inputs": {
+          "host": {
+            "connectionName": "shared_commondataserviceforapps",
+            "operationId": "GetItem",
+            "apiId": "/providers/Microsoft.PowerApps/apis/shared_commondataserviceforapps"
+          },
+          "parameters": {
+            "entityName": "cws_jobapplications",
+            "recordId": "@body('Create_application')?['cws_jobapplicationid']",
+            "$select": "cws_jobapplicationid,cws_role,cws_stage,cws_dateapplied,cws_jobid,cws_city,cws_arrangement,cws_nextstep,cws_notes",
+            "$expand": "cws_Company($select=cws_companyname),cws_BusinessGroup($select=cws_businessgroupname)"
+          }
+        },
+        "runAfter": {
+          "Associate_business_group": [
+            "Succeeded"
+          ]
+        }
+      },
+      "Respond_to_the_agent": {
+        "type": "Response",
+        "kind": "Skills",
+        "inputs": {
+          "statusCode": 200,
+          "body": {
+            "id": "@body('Create_application')?['cws_jobapplicationid']",
+            "role": "@body('Read_back')?['cws_role']",
+            "company": "@coalesce(body('Read_back')?['cws_Company']?['cws_companyname'],'')",
+            "businessGroup": "@coalesce(body('Read_back')?['cws_BusinessGroup']?['cws_businessgroupname'],'')",
+            "stage": "@body('Read_back')?['cws_stage']",
+            "dateApplied": "@if(empty(coalesce(body('Read_back')?['cws_dateapplied'],'')),'',convertFromUtc(body('Read_back')?['cws_dateapplied'],'Pacific Standard Time','yyyy-MM-dd'))",
+            "created": true
+          },
+          "schema": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "role": {
+                "type": "string"
+              },
+              "company": {
+                "type": "string"
+              },
+              "businessGroup": {
+                "type": "string"
+              },
+              "stage": {
+                "type": "integer"
+              },
+              "dateApplied": {
+                "type": "string"
+              },
+              "created": {
+                "type": "boolean"
+              }
+            }
+          }
+        },
+        "runAfter": {
+          "Read_back": [
+            "Succeeded"
+          ]
+        }
+      }
+    }
+  }
+}

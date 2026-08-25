@@ -1,0 +1,207 @@
+{
+  "name": "Agent — CreateFollowUp",
+  "description": "Creates a Follow-Up. Title, Due Date and Related Type are required. The due date is stored at local midnight so it matches the app's date picker and sorts correctly on the dashboard. The related Contact or Application is bound as a separate step.",
+  "definition": {
+    "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+      "$authentication": {
+        "defaultValue": {},
+        "type": "SecureObject"
+      },
+      "$connections": {
+        "defaultValue": {},
+        "type": "Object"
+      }
+    },
+    "triggers": {
+      "When_an_agent_calls_the_flow": {
+        "type": "Request",
+        "kind": "Skills",
+        "inputs": {
+          "schema": {
+            "type": "object",
+            "properties": {
+              "title": {
+                "type": "string",
+                "title": "title"
+              },
+              "dueDate": {
+                "type": "string",
+                "title": "dueDate",
+                "description": "Local calendar date as YYYY-MM-DD"
+              },
+              "relatedType": {
+                "type": "integer",
+                "title": "relatedType",
+                "description": "771670000 Contact, 771670001 Application, 771670002 None/Standalone"
+              },
+              "relatedId": {
+                "type": "string",
+                "title": "relatedId",
+                "description": "GUID of the related Contact or Application from ResolveRecord. Pass the word none when it does not apply — never ask the user for this."
+              },
+              "notes": {
+                "type": "string",
+                "title": "notes",
+                "description": "Optional — pass an empty string when it does not apply; never ask the user for it. Pass the word none when it does not apply — never ask the user for this."
+              }
+            },
+            "required": [
+              "title",
+              "dueDate",
+              "relatedType",
+              "relatedId",
+              "notes"
+            ]
+          }
+        }
+      }
+    },
+    "actions": {
+      "Create_follow_up": {
+        "type": "OpenApiConnection",
+        "inputs": {
+          "host": {
+            "connectionName": "shared_commondataserviceforapps",
+            "operationId": "CreateRecord",
+            "apiId": "/providers/Microsoft.PowerApps/apis/shared_commondataserviceforapps"
+          },
+          "parameters": {
+            "entityName": "cws_followups",
+            "item/cws_title": "@trim(triggerBody()?['title'])",
+            "item/cws_duedate": "@convertToUtc(concat(triggerBody()?['dueDate'],'T00:00:00'),'Pacific Standard Time')",
+            "item/cws_relatedtype": "@int(triggerBody()?['relatedType'])",
+            "item/cws_status": 771670000,
+            "item/cws_notes": "@if(equals(toLower(trim(coalesce(triggerBody()?['notes'],''))),'none'),'',coalesce(triggerBody()?['notes'],''))"
+          }
+        },
+        "runAfter": {}
+      },
+      "Bind_related_record": {
+        "type": "Switch",
+        "expression": "@if(or(empty(coalesce(triggerBody()?['relatedId'],'')),equals(toLower(string(triggerBody()?['relatedId'])),'none')),'none',string(triggerBody()?['relatedType']))",
+        "cases": {
+          "Contact": {
+            "case": "771670000",
+            "actions": {
+              "Bind_contact": {
+                "type": "OpenApiConnection",
+                "inputs": {
+                  "host": {
+                    "connectionName": "shared_commondataserviceforapps",
+                    "operationId": "UpdateRecord",
+                    "apiId": "/providers/Microsoft.PowerApps/apis/shared_commondataserviceforapps"
+                  },
+                  "parameters": {
+                    "entityName": "cws_followups",
+                    "recordId": "@body('Create_follow_up')?['cws_followupid']",
+                    "item/cws_RelatedContact@odata.bind": "@concat('/cws_networkingcontacts(', triggerBody()?['relatedId'], ')')"
+                  }
+                },
+                "runAfter": {}
+              }
+            }
+          },
+          "Application": {
+            "case": "771670001",
+            "actions": {
+              "Bind_application": {
+                "type": "OpenApiConnection",
+                "inputs": {
+                  "host": {
+                    "connectionName": "shared_commondataserviceforapps",
+                    "operationId": "UpdateRecord",
+                    "apiId": "/providers/Microsoft.PowerApps/apis/shared_commondataserviceforapps"
+                  },
+                  "parameters": {
+                    "entityName": "cws_followups",
+                    "recordId": "@body('Create_follow_up')?['cws_followupid']",
+                    "item/cws_RelatedApplication@odata.bind": "@concat('/cws_jobapplications(', triggerBody()?['relatedId'], ')')"
+                  }
+                },
+                "runAfter": {}
+              }
+            }
+          }
+        },
+        "default": {
+          "actions": {}
+        },
+        "runAfter": {
+          "Create_follow_up": [
+            "Succeeded"
+          ]
+        }
+      },
+      "Read_back": {
+        "type": "OpenApiConnection",
+        "inputs": {
+          "host": {
+            "connectionName": "shared_commondataserviceforapps",
+            "operationId": "GetItem",
+            "apiId": "/providers/Microsoft.PowerApps/apis/shared_commondataserviceforapps"
+          },
+          "parameters": {
+            "entityName": "cws_followups",
+            "recordId": "@body('Create_follow_up')?['cws_followupid']",
+            "$select": "cws_followupid,cws_title,cws_duedate,cws_status,cws_relatedtype,cws_notes",
+            "$expand": "cws_RelatedContact($select=cws_contactname),cws_RelatedApplication($select=cws_role)"
+          }
+        },
+        "runAfter": {
+          "Bind_related_record": [
+            "Succeeded"
+          ]
+        }
+      },
+      "Respond_to_the_agent": {
+        "type": "Response",
+        "kind": "Skills",
+        "inputs": {
+          "statusCode": 200,
+          "body": {
+            "id": "@body('Create_follow_up')?['cws_followupid']",
+            "title": "@body('Read_back')?['cws_title']",
+            "dueDate": "@convertFromUtc(body('Read_back')?['cws_duedate'],'Pacific Standard Time','yyyy-MM-dd')",
+            "relatedType": "@body('Read_back')?['cws_relatedtype']",
+            "relatedLabel": "@coalesce(body('Read_back')?['cws_RelatedApplication']?['cws_role'], body('Read_back')?['cws_RelatedContact']?['cws_contactname'], '')",
+            "status": "@body('Read_back')?['cws_status']",
+            "created": true
+          },
+          "schema": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "title": {
+                "type": "string"
+              },
+              "dueDate": {
+                "type": "string"
+              },
+              "relatedType": {
+                "type": "integer"
+              },
+              "relatedLabel": {
+                "type": "string"
+              },
+              "status": {
+                "type": "integer"
+              },
+              "created": {
+                "type": "boolean"
+              }
+            }
+          }
+        },
+        "runAfter": {
+          "Read_back": [
+            "Succeeded"
+          ]
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,17 @@
+App:
+  Properties:
+    OnStart: |
+      =Set(varReturnTo, "");
+      Set(varPrefillContactId, "");
+      Set(varSavedKind, "");
+      Set(varSavedTitle, "");
+      Set(varSavedContactId, "");
+      Set(varSavedContactName, "");
+      Set(varIntxCompanyId, "");
+      Set(varPrefillAppId, "");
+      Set(varPrefillIntxName, "");
+      Set(varPromptFollowUpId, "");
+      Set(varPromptContactId, "");
+      Set(varShowLogPrompt, false)
+    StartScreen: =Screen1
+    Theme: =PowerAppsTheme

@@ -1,0 +1,327 @@
+Screens:
+  ScrSaved:
+    Properties:
+      Fill: =RGBA(252, 246, 233, 1)
+    Children:
+      - conSvdRoot:
+          Control: GroupContainer
+          Variant: AutoLayout
+          Properties:
+            Fill: =RGBA(252, 246, 233, 1)
+            Height: =Parent.Height
+            LayoutAlignItems: =LayoutAlignItems.Stretch
+            LayoutDirection: =LayoutDirection.Vertical
+            Width: =Parent.Width
+          Children:
+            - conSvdTopBar:
+                Control: GroupContainer
+                Variant: AutoLayout
+                Properties:
+                  Fill: =RGBA(0, 72, 126, 1)
+                  FillPortions: =0
+                  Height: =56
+                  LayoutAlignItems: =LayoutAlignItems.Center
+                  LayoutDirection: =LayoutDirection.Horizontal
+                  LayoutGap: =8
+                  LayoutMinHeight: =56
+                  LayoutMinWidth: =0
+                  PaddingLeft: =16
+                  PaddingRight: =16
+                  RadiusBottomLeft: =0
+                  RadiusBottomRight: =0
+                  RadiusTopLeft: =0
+                  RadiusTopRight: =0
+                Children:
+                  - txtSvdTitleBar:
+                      Control: ModernText
+                      Properties:
+                        AccessibleLabel: ="Saved"
+                        AlignInContainer: =AlignInContainer.Stretch
+                        Color: =RGBA(252, 248, 240, 1)
+                        FillPortions: =1
+                        Font: =Font.'Segoe UI'
+                        FontWeight: =FontWeight.Semibold
+                        Height: =44
+                        PaddingBottom: =0
+                        PaddingLeft: =0
+                        PaddingRight: =0
+                        PaddingTop: =0
+                        Size: =18
+                        Text: ="Saved"
+                        Wrap: =false
+            - conSvdBody:
+                Control: GroupContainer
+                Variant: AutoLayout
+                Properties:
+                  Fill: =RGBA(252, 246, 233, 1)
+                  LayoutAlignItems: =LayoutAlignItems.Stretch
+                  LayoutDirection: =LayoutDirection.Vertical
+                  LayoutGap: =16
+                  LayoutMinHeight: =0
+                  LayoutMinWidth: =0
+                  LayoutOverflowY: =LayoutOverflow.Scroll
+                  PaddingBottom: =16
+                  PaddingLeft: =16
+                  PaddingRight: =16
+                  PaddingTop: =16
+                Children:
+                  - conSvdHero:
+                      Control: GroupContainer
+                      Variant: AutoLayout
+                      Properties:
+                        BorderColor: =RGBA(211, 201, 185, 1)
+                        BorderThickness: =1
+                        Fill: =RGBA(255, 255, 255, 1)
+                        FillPortions: =0
+                        Height: =184
+                        LayoutAlignItems: =LayoutAlignItems.Stretch
+                        LayoutDirection: =LayoutDirection.Vertical
+                        LayoutGap: =8
+                        LayoutMinHeight: =0
+                        LayoutMinWidth: =0
+                        PaddingBottom: =20
+                        PaddingLeft: =16
+                        PaddingRight: =16
+                        PaddingTop: =20
+                        RadiusBottomLeft: =12
+                        RadiusBottomRight: =12
+                        RadiusTopLeft: =12
+                        RadiusTopRight: =12
+                      Children:
+                        - icoSvdCheck:
+                            Control: ModernIcon
+                            Properties:
+                              AccessibleLabel: ="Saved"
+                              AlignInContainer: =AlignInContainer.Center
+                              Fill: =RGBA(255, 255, 255, 1)
+                              Height: =56
+                              Icon: ="CheckmarkCircle"
+                              IconColor: =RGBA(213, 141, 37, 1)
+                              IconStyle: =IconStyle.Filled
+                              Width: =56
+                        - txtSvdHeadline:
+                            Control: ModernText
+                            Properties:
+                              AccessibleLabel: ="Save confirmation headline"
+                              Align: =Align.Center
+                              AlignInContainer: =AlignInContainer.Stretch
+                              Color: =RGBA(8, 19, 28, 1)
+                              Font: =Font.'Segoe UI'
+                              FontWeight: =FontWeight.Semibold
+                              Height: =34
+                              PaddingBottom: =0
+                              PaddingLeft: =0
+                              PaddingRight: =0
+                              PaddingTop: =0
+                              Size: =22
+                              Text: |-
+                                =Switch(
+                                    varSavedKind,
+                                    "Contact", "Contact saved",
+                                    "Interaction", "Interaction logged",
+                                    "FollowUp", "Follow-up added",
+                                    "Saved"
+                                )
+                              Wrap: =false
+                        - txtSvdDetail:
+                            Control: ModernText
+                            Properties:
+                              AccessibleLabel: ="Details of the record just saved"
+                              Align: =Align.Center
+                              AlignInContainer: =AlignInContainer.Stretch
+                              Color: =RGBA(45, 63, 78, 1)
+                              Font: =Font.'Segoe UI'
+                              Height: =38
+                              PaddingBottom: =0
+                              PaddingLeft: =0
+                              PaddingRight: =0
+                              PaddingTop: =0
+                              Size: =14
+                              Text: =varSavedTitle
+                              VerticalAlign: =VerticalAlign.Top
+                  - txtSvdNextHeading:
+                      Control: ModernText
+                      Properties:
+                        AccessibleLabel: ="What's next"
+                        AlignInContainer: =AlignInContainer.Stretch
+                        Color: =RGBA(8, 19, 28, 1)
+                        Font: =Font.'Segoe UI'
+                        FontWeight: =FontWeight.Semibold
+                        Height: =24
+                        PaddingBottom: =0
+                        PaddingLeft: =0
+                        PaddingRight: =0
+                        PaddingTop: =0
+                        Size: =16
+                        Text: ="What's next?"
+                        Wrap: =false
+                  - btnSvdLogInteraction:
+                      Control: ModernButton
+                      Properties:
+                        AccessibleLabel: ="Log an interaction with " & varSavedContactName
+                        Align: =Align.Left
+                        AlignInContainer: =AlignInContainer.Stretch
+                        Appearance: =ButtonAppearance.Secondary
+                        BasePaletteColor: =RGBA(232, 221, 196, 1)
+                        Color: =RGBA(8, 19, 28, 1)
+                        Font: =Font.'Segoe UI'
+                        FontWeight: =FontWeight.Semibold
+                        Height: =60
+                        Layout: =ButtonLayout.TextOnly
+                        OnSelect: |-
+                          =Set(varPrefillContactId, varSavedContactId);
+                          Set(varReturnTo, "");
+                          Navigate(ScrInteraction, ScreenTransition.Fade)
+                        PaddingBottom: =0
+                        PaddingLeft: =18
+                        PaddingRight: =18
+                        PaddingTop: =0
+                        RadiusBottomLeft: =12
+                        RadiusBottomRight: =12
+                        RadiusTopLeft: =12
+                        RadiusTopRight: =12
+                        Size: =16
+                        Text: ="Log an interaction with " & varSavedContactName
+                        VerticalAlign: =VerticalAlign.Middle
+                        Visible: =varSavedKind = "Contact" && varSavedContactId <> ""
+                        Width: =Parent.Width
+                  - btnSvdAddFollowUp:
+                      Control: ModernButton
+                      Properties:
+                        AccessibleLabel: ="Add a follow-up for " & varSavedContactName
+                        Align: =Align.Left
+                        AlignInContainer: =AlignInContainer.Stretch
+                        Appearance: =ButtonAppearance.Secondary
+                        BasePaletteColor: =RGBA(232, 221, 196, 1)
+                        Color: =RGBA(8, 19, 28, 1)
+                        Font: =Font.'Segoe UI'
+                        FontWeight: =FontWeight.Semibold
+                        Height: =60
+                        Layout: =ButtonLayout.TextOnly
+                        OnSelect: |-
+                          =Set(varPrefillContactId, varSavedContactId);
+                          Set(varReturnTo, "");
+                          Navigate(ScrFollowUp, ScreenTransition.Fade)
+                        PaddingBottom: =0
+                        PaddingLeft: =18
+                        PaddingRight: =18
+                        PaddingTop: =0
+                        RadiusBottomLeft: =12
+                        RadiusBottomRight: =12
+                        RadiusTopLeft: =12
+                        RadiusTopRight: =12
+                        Size: =16
+                        Text: ="Add a follow-up for " & varSavedContactName
+                        VerticalAlign: =VerticalAlign.Middle
+                        Visible: =(varSavedKind = "Contact" || varSavedKind = "Interaction") && varSavedContactId <> ""
+                        Width: =Parent.Width
+                  - btnSvdAnotherContact:
+                      Control: ModernButton
+                      Properties:
+                        AccessibleLabel: ="Log another interaction"
+                        Align: =Align.Left
+                        AlignInContainer: =AlignInContainer.Stretch
+                        Appearance: =ButtonAppearance.Secondary
+                        BasePaletteColor: =RGBA(232, 221, 196, 1)
+                        Color: =RGBA(8, 19, 28, 1)
+                        Font: =Font.'Segoe UI'
+                        FontWeight: =FontWeight.Semibold
+                        Height: =60
+                        Layout: =ButtonLayout.TextOnly
+                        OnSelect: |-
+                          =Set(varPrefillContactId, "");
+                          Set(varReturnTo, "");
+                          Navigate(ScrInteraction, ScreenTransition.Fade)
+                        PaddingBottom: =0
+                        PaddingLeft: =18
+                        PaddingRight: =18
+                        PaddingTop: =0
+                        RadiusBottomLeft: =12
+                        RadiusBottomRight: =12
+                        RadiusTopLeft: =12
+                        RadiusTopRight: =12
+                        Size: =16
+                        Text: ="Log another interaction"
+                        VerticalAlign: =VerticalAlign.Middle
+                        Visible: =varSavedKind = "Interaction"
+                        Width: =Parent.Width
+                  - btnSvdAnotherFollowUp:
+                      Control: ModernButton
+                      Properties:
+                        AccessibleLabel: ="Add another follow-up"
+                        Align: =Align.Left
+                        AlignInContainer: =AlignInContainer.Stretch
+                        Appearance: =ButtonAppearance.Secondary
+                        BasePaletteColor: =RGBA(232, 221, 196, 1)
+                        Color: =RGBA(8, 19, 28, 1)
+                        Font: =Font.'Segoe UI'
+                        FontWeight: =FontWeight.Semibold
+                        Height: =60
+                        Layout: =ButtonLayout.TextOnly
+                        OnSelect: |-
+                          =Set(varPrefillContactId, "");
+                          Set(varReturnTo, "");
+                          Navigate(ScrFollowUp, ScreenTransition.Fade)
+                        PaddingBottom: =0
+                        PaddingLeft: =18
+                        PaddingRight: =18
+                        PaddingTop: =0
+                        RadiusBottomLeft: =12
+                        RadiusBottomRight: =12
+                        RadiusTopLeft: =12
+                        RadiusTopRight: =12
+                        Size: =16
+                        Text: ="Add another follow-up"
+                        VerticalAlign: =VerticalAlign.Middle
+                        Visible: =varSavedKind = "FollowUp"
+                        Width: =Parent.Width
+            - conSvdFooter:
+                Control: GroupContainer
+                Variant: AutoLayout
+                Properties:
+                  BorderColor: =RGBA(211, 201, 185, 1)
+                  BorderThickness: =1
+                  Fill: =RGBA(255, 255, 255, 1)
+                  FillPortions: =0
+                  Height: =76
+                  LayoutAlignItems: =LayoutAlignItems.Stretch
+                  LayoutDirection: =LayoutDirection.Vertical
+                  LayoutMinHeight: =76
+                  LayoutMinWidth: =0
+                  PaddingBottom: =12
+                  PaddingLeft: =16
+                  PaddingRight: =16
+                  PaddingTop: =12
+                Children:
+                  - btnSvdDone:
+                      Control: ModernButton
+                      Properties:
+                        AccessibleLabel: ="Done, return to home"
+                        Align: =Align.Center
+                        AlignInContainer: =AlignInContainer.Stretch
+                        BasePaletteColor: =RGBA(0, 72, 126, 1)
+                        Color: =RGBA(252, 248, 240, 1)
+                        Font: =Font.'Segoe UI'
+                        FontWeight: =FontWeight.Semibold
+                        Height: =52
+                        Layout: =ButtonLayout.TextOnly
+                        OnSelect: |-
+                          =Set(varPrefillContactId, "");
+                          Set(varReturnTo, "");
+                          Set(varSavedKind, "");
+                          Set(varSavedTitle, "");
+                          Set(varSavedContactId, "");
+                          Set(varSavedContactName, "");
+                          Navigate(Screen1, ScreenTransition.Fade)
+                        PaddingBottom: =0
+                        PaddingLeft: =16
+                        PaddingRight: =16
+                        PaddingTop: =0
+                        RadiusBottomLeft: =12
+                        RadiusBottomRight: =12
+                        RadiusTopLeft: =12
+                        RadiusTopRight: =12
+                        Size: =16
+                        Text: ="Done"
+                        VerticalAlign: =VerticalAlign.Middle
+                        Width: =Parent.Width

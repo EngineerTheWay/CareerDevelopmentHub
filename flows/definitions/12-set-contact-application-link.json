@@ -1,0 +1,253 @@
+{
+  "name": "Agent — SetContactApplicationLink",
+  "description": "Links or unlinks a Networking Contact and a Job Application through the junction table. A link is only allowed when the contact and the application belong to the SAME company — the business apps filter cross-company pairs out, so creating one here would produce a record the apps cannot show. Unlinking is always allowed so existing bad pairs can be cleaned up. Idempotent in both directions.",
+  "definition": {
+    "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+      "$authentication": {
+        "defaultValue": {},
+        "type": "SecureObject"
+      },
+      "$connections": {
+        "defaultValue": {},
+        "type": "Object"
+      }
+    },
+    "triggers": {
+      "When_an_agent_calls_the_flow": {
+        "type": "Request",
+        "kind": "Skills",
+        "inputs": {
+          "schema": {
+            "type": "object",
+            "properties": {
+              "contactId": {
+                "type": "string",
+                "title": "contactId",
+                "description": "Networking Contact GUID from ResolveRecord"
+              },
+              "applicationId": {
+                "type": "string",
+                "title": "applicationId",
+                "description": "Job Application GUID from ResolveRecord"
+              },
+              "linked": {
+                "type": "boolean",
+                "title": "linked",
+                "description": "true to link, false to unlink. Defaults to true. Optional — pass an empty string when it does not apply; never ask the user for it."
+              }
+            },
+            "required": [
+              "contactId",
+              "applicationId"
+            ]
+          }
+        }
+      }
+    },
+    "actions": {
+      "Find_existing": {
+        "type": "OpenApiConnection",
+        "inputs": {
+          "host": {
+            "connectionName": "shared_commondataserviceforapps",
+            "operationId": "ListRecords",
+            "apiId": "/providers/Microsoft.PowerApps/apis/shared_commondataserviceforapps"
+          },
+          "parameters": {
+            "entityName": "cws_contactapplications",
+            "$select": "cws_contactapplicationid,cws_contactapplicationname",
+            "$filter": "@concat('statecode eq 0 and _cws_networkingcontact_value eq ', triggerBody()?['contactId'], ' and _cws_jobapplication_value eq ', triggerBody()?['applicationId'])",
+            "$top": 5
+          }
+        },
+        "runAfter": {}
+      },
+      "Plan": {
+        "type": "Compose",
+        "inputs": {
+          "wantLinked": "@not(equals(toLower(string(coalesce(triggerBody()?['linked'],'true'))),'false'))",
+          "existingCount": "@length(outputs('Find_existing')?['body/value'])",
+          "companyMatch": "@equals(string(body('Get_contact')?['_cws_company_value']),string(body('Get_application')?['_cws_company_value']))",
+          "contactCompany": "@coalesce(body('Get_contact')?['cws_Company']?['cws_companyname'],'')",
+          "applicationCompany": "@coalesce(body('Get_application')?['cws_Company']?['cws_companyname'],'')",
+          "shouldCreate": "@and(and(not(equals(toLower(string(coalesce(triggerBody()?['linked'],'true'))),'false')), equals(string(body('Get_contact')?['_cws_company_value']),string(body('Get_application')?['_cws_company_value']))), equals(length(outputs('Find_existing')?['body/value']),0))",
+          "shouldDelete": "@and(not(not(equals(toLower(string(coalesce(triggerBody()?['linked'],'true'))),'false'))), greater(length(outputs('Find_existing')?['body/value']),0))",
+          "blocked": "@and(not(equals(toLower(string(coalesce(triggerBody()?['linked'],'true'))),'false')), not(equals(string(body('Get_contact')?['_cws_company_value']),string(body('Get_application')?['_cws_company_value']))))"
+        },
+        "runAfter": {
+          "Get_application": [
+            "Succeeded"
+          ]
+        }
+      },
+      "Create_link": {
+        "type": "If",
+        "expression": {
+          "and": [
+            {
+              "equals": [
+                "@outputs('Plan')['shouldCreate']",
+                true
+              ]
+            }
+          ]
+        },
+        "actions": {
+          "Create_junction": {
+            "type": "OpenApiConnection",
+            "inputs": {
+              "host": {
+                "connectionName": "shared_commondataserviceforapps",
+                "operationId": "CreateRecord",
+                "apiId": "/providers/Microsoft.PowerApps/apis/shared_commondataserviceforapps"
+              },
+              "parameters": {
+                "entityName": "cws_contactapplications",
+                "item/cws_contactapplicationname": "@concat(coalesce(body('Get_contact')?['cws_contactname'],'Contact'), ' — ', coalesce(body('Get_application')?['cws_role'],'Application'))",
+                "item/cws_NetworkingContact@odata.bind": "@concat('/cws_networkingcontacts(', triggerBody()?['contactId'], ')')",
+                "item/cws_JobApplication@odata.bind": "@concat('/cws_jobapplications(', triggerBody()?['applicationId'], ')')"
+              }
+            },
+            "runAfter": {}
+          }
+        },
+        "else": {
+          "actions": {}
+        },
+        "runAfter": {
+          "Plan": [
+            "Succeeded"
+          ]
+        }
+      },
+      "Remove_link": {
+        "type": "If",
+        "expression": {
+          "and": [
+            {
+              "equals": [
+                "@outputs('Plan')['shouldDelete']",
+                true
+              ]
+            }
+          ]
+        },
+        "actions": {
+          "Delete_junction": {
+            "type": "OpenApiConnection",
+            "inputs": {
+              "host": {
+                "connectionName": "shared_commondataserviceforapps",
+                "operationId": "DeleteRecord",
+                "apiId": "/providers/Microsoft.PowerApps/apis/shared_commondataserviceforapps"
+              },
+              "parameters": {
+                "entityName": "cws_contactapplications",
+                "recordId": "@first(outputs('Find_existing')?['body/value'])?['cws_contactapplicationid']"
+              }
+            },
+            "runAfter": {}
+          }
+        },
+        "else": {
+          "actions": {}
+        },
+        "runAfter": {
+          "Create_link": [
+            "Succeeded"
+          ]
+        }
+      },
+      "Respond_to_the_agent": {
+        "type": "Response",
+        "kind": "Skills",
+        "inputs": {
+          "statusCode": 200,
+          "body": {
+            "contactId": "@triggerBody()?['contactId']",
+            "applicationId": "@triggerBody()?['applicationId']",
+            "linked": "@outputs('Plan')['wantLinked']",
+            "changed": "@or(outputs('Plan')['shouldCreate'], outputs('Plan')['shouldDelete'])",
+            "message": "@if(outputs('Plan')['blocked'], concat('Refused: ', body('Get_contact')?['cws_contactname'], ' is at ', outputs('Plan')['contactCompany'], ' but this application is at ', outputs('Plan')['applicationCompany'], '. Contacts can only be linked to applications at the same company.'), if(outputs('Plan')['shouldCreate'],'Linked.',if(outputs('Plan')['shouldDelete'],'Unlinked.',if(outputs('Plan')['wantLinked'],'Already linked — nothing to do.','Not linked — nothing to do.'))))",
+            "companyMatch": "@outputs('Plan')['companyMatch']"
+          },
+          "schema": {
+            "type": "object",
+            "properties": {
+              "contactId": {
+                "type": "string"
+              },
+              "applicationId": {
+                "type": "string"
+              },
+              "linked": {
+                "type": "boolean",
+                "description": "The requested end state"
+              },
+              "changed": {
+                "type": "boolean",
+                "description": "False when it was already in the requested state"
+              },
+              "message": {
+                "type": "string"
+              },
+              "companyMatch": {
+                "type": "boolean",
+                "description": "False when the contact and application are at different companies; the link is refused"
+              }
+            }
+          }
+        },
+        "runAfter": {
+          "Remove_link": [
+            "Succeeded"
+          ]
+        }
+      },
+      "Get_contact": {
+        "type": "OpenApiConnection",
+        "inputs": {
+          "host": {
+            "connectionName": "shared_commondataserviceforapps",
+            "operationId": "GetItem",
+            "apiId": "/providers/Microsoft.PowerApps/apis/shared_commondataserviceforapps"
+          },
+          "parameters": {
+            "entityName": "cws_networkingcontacts",
+            "recordId": "@triggerBody()?['contactId']",
+            "$select": "cws_networkingcontactid,cws_contactname,_cws_company_value",
+            "$expand": "cws_Company($select=cws_companyname)"
+          }
+        },
+        "runAfter": {
+          "Find_existing": [
+            "Succeeded"
+          ]
+        }
+      },
+      "Get_application": {
+        "type": "OpenApiConnection",
+        "inputs": {
+          "host": {
+            "connectionName": "shared_commondataserviceforapps",
+            "operationId": "GetItem",
+            "apiId": "/providers/Microsoft.PowerApps/apis/shared_commondataserviceforapps"
+          },
+          "parameters": {
+            "entityName": "cws_jobapplications",
+            "recordId": "@triggerBody()?['applicationId']",
+            "$select": "cws_jobapplicationid,cws_role,_cws_company_value",
+            "$expand": "cws_Company($select=cws_companyname)"
+          }
+        },
+        "runAfter": {
+          "Get_contact": [
+            "Succeeded"
+          ]
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,71 @@
+{
+  "version": "1.0",
+  "appId": "<CODE_APP_ID>",
+  "appDisplayName": "Career Development Hub",
+  "region": "prod",
+  "environmentId": "<ENVIRONMENT_ID>",
+  "description": "A personal career development app for tracking networking contacts, job applications, interactions, and follow-up reminders.",
+  "buildPath": "./dist",
+  "buildEntryPoint": "index.html",
+  "localAppUrl": "http://localhost:5173/",
+  "logoPath": "Default",
+  "connectionReferences": {},
+  "databaseReferences": {
+    "default.cds": {
+      "databaseDetails": {
+        "environmentName": "default.cds",
+        "referenceType": "Environmental",
+        "linkedEnvironmentMetadata": {
+          "resourceId": "<DATAVERSE_RESOURCE_ID>",
+          "friendlyName": "<ENVIRONMENT_NAME>",
+          "uniqueName": "<ORG_UNIQUE_NAME>",
+          "domainName": "<ORG_NAME>",
+          "version": "9.2.26072.150",
+          "instanceUrl": "https://<ORG_NAME>.crm.dynamics.com/",
+          "instanceApiUrl": "https://<ORG_NAME>.api.crm.dynamics.com",
+          "baseLanguage": 1033,
+          "instanceState": "Ready",
+          "createdTime": "2026-02-16T05:01:03.133Z",
+          "platformSku": "Standard"
+        }
+      },
+      "dataSources": {
+        "cws_businessgroup": {
+          "entitySetName": "cws_businessgroups",
+          "logicalName": "cws_businessgroup",
+          "isHidden": false
+        },
+        "cws_company": {
+          "entitySetName": "cws_companies",
+          "logicalName": "cws_company",
+          "isHidden": false
+        },
+        "cws_networkingcontact": {
+          "entitySetName": "cws_networkingcontacts",
+          "logicalName": "cws_networkingcontact",
+          "isHidden": false
+        },
+        "cws_interaction": {
+          "entitySetName": "cws_interactions",
+          "logicalName": "cws_interaction",
+          "isHidden": false
+        },
+        "cws_followup": {
+          "entitySetName": "cws_followups",
+          "logicalName": "cws_followup",
+          "isHidden": false
+        },
+        "cws_contactapplication": {
+          "entitySetName": "cws_contactapplications",
+          "logicalName": "cws_contactapplication",
+          "isHidden": false
+        },
+        "cws_jobapplication": {
+          "entitySetName": "cws_jobapplications",
+          "logicalName": "cws_jobapplication",
+          "isHidden": false
+        }
+      }
+    }
+  }
+}

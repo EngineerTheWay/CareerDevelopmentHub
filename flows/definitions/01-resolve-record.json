@@ -1,0 +1,336 @@
+{
+  "name": "Agent — ResolveRecord",
+  "description": "Resolves a Company, Business Group, Contact, Job Application or Follow-Up by name. Returns matchKind (exact/close/ambiguous/none), the resolved id, and candidates. Business Groups are never created. Companies are created only when allowCreate is true.",
+  "definition": {
+    "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+      "$authentication": {
+        "defaultValue": {},
+        "type": "SecureObject"
+      },
+      "$connections": {
+        "defaultValue": {},
+        "type": "Object"
+      }
+    },
+    "triggers": {
+      "When_an_agent_calls_the_flow": {
+        "type": "Request",
+        "kind": "Skills",
+        "inputs": {
+          "schema": {
+            "type": "object",
+            "properties": {
+              "type": {
+                "type": "string",
+                "title": "type",
+                "description": "One of: company, businessGroup, contact, application, followUp"
+              },
+              "name": {
+                "type": "string",
+                "title": "name",
+                "description": "The name text to search for"
+              },
+              "scope": {
+                "type": "string",
+                "title": "scope",
+                "description": "Company GUID used to narrow the search. Only meaningful for businessGroup, contact and application. Optional — pass an empty string when it does not apply; never ask the user for it."
+              },
+              "allowCreate": {
+                "type": "boolean",
+                "title": "allowCreate",
+                "description": "Create the record when no match is found. Honoured only when type is company. Never for businessGroup. Optional — pass an empty string when it does not apply; never ask the user for it."
+              }
+            },
+            "required": [
+              "type",
+              "name"
+            ]
+          }
+        }
+      }
+    },
+    "actions": {
+      "Init_resolvedId": {
+        "type": "InitializeVariable",
+        "inputs": {
+          "variables": [
+            {
+              "name": "resolvedId",
+              "type": "string",
+              "value": ""
+            }
+          ]
+        },
+        "runAfter": {}
+      },
+      "Init_matchKind": {
+        "type": "InitializeVariable",
+        "inputs": {
+          "variables": [
+            {
+              "name": "matchKind",
+              "type": "string",
+              "value": "none"
+            }
+          ]
+        },
+        "runAfter": {
+          "Init_resolvedId": [
+            "Succeeded"
+          ]
+        }
+      },
+      "Init_created": {
+        "type": "InitializeVariable",
+        "inputs": {
+          "variables": [
+            {
+              "name": "created",
+              "type": "boolean",
+              "value": false
+            }
+          ]
+        },
+        "runAfter": {
+          "Init_matchKind": [
+            "Succeeded"
+          ]
+        }
+      },
+      "Meta": {
+        "type": "Compose",
+        "inputs": {
+          "tableSet": "@if(equals(triggerBody()?['type'],'company'),'cws_companies',if(equals(triggerBody()?['type'],'businessGroup'),'cws_businessgroups',if(equals(triggerBody()?['type'],'contact'),'cws_networkingcontacts',if(equals(triggerBody()?['type'],'application'),'cws_jobapplications','cws_followups'))))",
+          "nameField": "@if(equals(triggerBody()?['type'],'company'),'cws_companyname',if(equals(triggerBody()?['type'],'businessGroup'),'cws_businessgroupname',if(equals(triggerBody()?['type'],'contact'),'cws_contactname',if(equals(triggerBody()?['type'],'application'),'cws_role','cws_title'))))",
+          "idField": "@if(equals(triggerBody()?['type'],'company'),'cws_companyid',if(equals(triggerBody()?['type'],'businessGroup'),'cws_businessgroupid',if(equals(triggerBody()?['type'],'contact'),'cws_networkingcontactid',if(equals(triggerBody()?['type'],'application'),'cws_jobapplicationid','cws_followupid'))))"
+        },
+        "runAfter": {
+          "Init_created": [
+            "Succeeded"
+          ]
+        }
+      },
+      "Filter_string": {
+        "type": "Compose",
+        "inputs": "@concat('statecode eq 0 and contains(', outputs('Meta')['nameField'], ',''', replace(trim(triggerBody()?['name']),'''',''''''), ''')', if(and(not(empty(coalesce(triggerBody()?['scope'],''))),not(equals(triggerBody()?['type'],'company'))), concat(' and _cws_company_value eq ', triggerBody()?['scope']), ''))",
+        "runAfter": {
+          "Meta": [
+            "Succeeded"
+          ]
+        }
+      },
+      "List_matches": {
+        "type": "OpenApiConnection",
+        "inputs": {
+          "host": {
+            "connectionName": "shared_commondataserviceforapps",
+            "operationId": "ListRecords",
+            "apiId": "/providers/Microsoft.PowerApps/apis/shared_commondataserviceforapps"
+          },
+          "parameters": {
+            "entityName": "@outputs('Meta')['tableSet']",
+            "$filter": "@outputs('Filter_string')",
+            "$top": 15
+          }
+        },
+        "runAfter": {
+          "Filter_string": [
+            "Succeeded"
+          ]
+        }
+      },
+      "Select_candidates": {
+        "type": "Select",
+        "inputs": {
+          "from": "@outputs('List_matches')?['body/value']",
+          "select": {
+            "id": "@item()?[outputs('Meta')['idField']]",
+            "name": "@item()?[outputs('Meta')['nameField']]"
+          }
+        },
+        "runAfter": {
+          "List_matches": [
+            "Succeeded"
+          ]
+        }
+      },
+      "Exact_matches": {
+        "type": "Query",
+        "inputs": {
+          "from": "@body('Select_candidates')",
+          "where": "@equals(toLower(trim(coalesce(item()?['name'],''))), toLower(trim(triggerBody()?['name'])))"
+        },
+        "runAfter": {
+          "Select_candidates": [
+            "Succeeded"
+          ]
+        }
+      },
+      "Set_matchKind": {
+        "type": "SetVariable",
+        "inputs": {
+          "name": "matchKind",
+          "value": "@if(equals(length(body('Exact_matches')),1),'exact',if(equals(length(body('Select_candidates')),0),'none',if(equals(length(body('Select_candidates')),1),'close','ambiguous')))"
+        },
+        "runAfter": {
+          "Exact_matches": [
+            "Succeeded"
+          ]
+        }
+      },
+      "Set_resolvedId": {
+        "type": "SetVariable",
+        "inputs": {
+          "name": "resolvedId",
+          "value": "@if(equals(length(body('Exact_matches')),1), string(first(body('Exact_matches'))?['id']), if(equals(length(body('Select_candidates')),1), string(first(body('Select_candidates'))?['id']), ''))"
+        },
+        "runAfter": {
+          "Set_matchKind": [
+            "Succeeded"
+          ]
+        }
+      },
+      "Should_create_company": {
+        "type": "If",
+        "expression": {
+          "and": [
+            {
+              "equals": [
+                "@variables('matchKind')",
+                "none"
+              ]
+            },
+            {
+              "equals": [
+                "@toLower(string(coalesce(triggerBody()?['allowCreate'],'false')))",
+                "true"
+              ]
+            },
+            {
+              "equals": [
+                "@triggerBody()?['type']",
+                "company"
+              ]
+            }
+          ]
+        },
+        "actions": {
+          "Create_company": {
+            "type": "OpenApiConnection",
+            "inputs": {
+              "host": {
+                "connectionName": "shared_commondataserviceforapps",
+                "operationId": "CreateRecord",
+                "apiId": "/providers/Microsoft.PowerApps/apis/shared_commondataserviceforapps"
+              },
+              "parameters": {
+                "entityName": "cws_companies",
+                "item/cws_companyname": "@trim(triggerBody()?['name'])"
+              }
+            },
+            "runAfter": {}
+          },
+          "Set_created_id": {
+            "type": "SetVariable",
+            "inputs": {
+              "name": "resolvedId",
+              "value": "@string(body('Create_company')?['cws_companyid'])"
+            },
+            "runAfter": {
+              "Create_company": [
+                "Succeeded"
+              ]
+            }
+          },
+          "Set_created_kind": {
+            "type": "SetVariable",
+            "inputs": {
+              "name": "matchKind",
+              "value": "exact"
+            },
+            "runAfter": {
+              "Set_created_id": [
+                "Succeeded"
+              ]
+            }
+          },
+          "Set_created_flag": {
+            "type": "SetVariable",
+            "inputs": {
+              "name": "created",
+              "value": true
+            },
+            "runAfter": {
+              "Set_created_kind": [
+                "Succeeded"
+              ]
+            }
+          }
+        },
+        "else": {
+          "actions": {}
+        },
+        "runAfter": {
+          "Set_resolvedId": [
+            "Succeeded"
+          ]
+        }
+      },
+      "Respond_to_the_agent": {
+        "type": "Response",
+        "kind": "Skills",
+        "inputs": {
+          "statusCode": 200,
+          "body": {
+            "matchKind": "@variables('matchKind')",
+            "id": "@variables('resolvedId')",
+            "created": "@variables('created')",
+            "candidateCount": "@length(body('Select_candidates'))",
+            "candidates": "@body('Select_candidates')"
+          },
+          "schema": {
+            "type": "object",
+            "properties": {
+              "matchKind": {
+                "type": "string",
+                "description": "exact, close, ambiguous or none"
+              },
+              "id": {
+                "type": "string",
+                "description": "Resolved record GUID; empty string when unresolved"
+              },
+              "created": {
+                "type": "boolean",
+                "description": "True when a new Company was created"
+              },
+              "candidateCount": {
+                "type": "integer"
+              },
+              "candidates": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "name": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "runAfter": {
+          "Should_create_company": [
+            "Succeeded"
+          ]
+        }
+      }
+    }
+  }
+}

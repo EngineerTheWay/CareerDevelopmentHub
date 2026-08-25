@@ -1,0 +1,676 @@
+Screens:
+  Screen1:
+    Properties:
+      Fill: =RGBA(252, 246, 233, 1)
+      OnVisible: |-
+        =ClearCollect(
+            colHomeOpen,
+            Filter('Follow Ups', cws_status = 'Status (Follow Ups)'.Open)
+        );
+        ClearCollect(
+            colHomeDue,
+            SortByColumns(
+                Filter(
+                    colHomeOpen,
+                    !IsBlank(cws_duedate)
+                      && Date(Year(cws_duedate), Month(cws_duedate), Day(cws_duedate)) <= Today()
+                ),
+                "cws_duedate",
+                SortOrder.Ascending
+            )
+        )
+    Children:
+      - conHomeRoot:
+          Control: GroupContainer
+          Variant: AutoLayout
+          Properties:
+            Fill: =RGBA(252, 246, 233, 1)
+            Height: =Parent.Height
+            LayoutAlignItems: =LayoutAlignItems.Stretch
+            LayoutDirection: =LayoutDirection.Vertical
+            RadiusBottomLeft: =0
+            RadiusBottomRight: =0
+            RadiusTopLeft: =0
+            RadiusTopRight: =0
+            Width: =Parent.Width
+          Children:
+            - conHomeTopBar:
+                Control: GroupContainer
+                Variant: AutoLayout
+                Properties:
+                  Fill: =RGBA(0, 72, 126, 1)
+                  FillPortions: =0
+                  Height: =56
+                  LayoutAlignItems: =LayoutAlignItems.Center
+                  LayoutDirection: =LayoutDirection.Horizontal
+                  LayoutGap: =8
+                  LayoutMinHeight: =56
+                  LayoutMinWidth: =0
+                  PaddingLeft: =6
+                  PaddingRight: =16
+                  RadiusBottomLeft: =0
+                  RadiusBottomRight: =0
+                  RadiusTopLeft: =0
+                  RadiusTopRight: =0
+                Children:
+                  - txtHomeTitle:
+                      Control: ModernText
+                      Properties:
+                        AccessibleLabel: ="Career Quick Capture"
+                        AlignInContainer: =AlignInContainer.Stretch
+                        Color: =RGBA(252, 248, 240, 1)
+                        FillPortions: =1
+                        Font: =Font.'Segoe UI'
+                        FontWeight: =FontWeight.Semibold
+                        Height: =44
+                        PaddingBottom: =0
+                        PaddingLeft: =10
+                        PaddingRight: =0
+                        PaddingTop: =0
+                        Size: =24
+                        Text: ="Career Quick Capture"
+                        Wrap: =false
+                  - icoHomeRefresh:
+                      Control: ModernIcon
+                      Properties:
+                        AccessibleLabel: ="Refresh follow-ups"
+                        AlignInContainer: =AlignInContainer.Center
+                        Height: =44
+                        Icon: ="ArrowClockwise"
+                        IconColor: =RGBA(252, 248, 240, 1)
+                        IconStyle: =IconStyle.Filled
+                        LayoutMinWidth: =44
+                        OnSelect: |-
+                          =ClearCollect(
+                              colHomeOpen,
+                              Filter('Follow Ups', cws_status = 'Status (Follow Ups)'.Open)
+                          );
+                          ClearCollect(
+                              colHomeDue,
+                              SortByColumns(
+                                  Filter(
+                                      colHomeOpen,
+                                      !IsBlank(cws_duedate)
+                                        && Date(Year(cws_duedate), Month(cws_duedate), Day(cws_duedate)) <= Today()
+                                  ),
+                                  "cws_duedate",
+                                  SortOrder.Ascending
+                              )
+                          )
+                        Tooltip: ="Refresh"
+                        Width: =44
+            - conHomeBody:
+                Control: GroupContainer
+                Variant: AutoLayout
+                Properties:
+                  Fill: =RGBA(252, 246, 233, 1)
+                  LayoutAlignItems: =LayoutAlignItems.Stretch
+                  LayoutDirection: =LayoutDirection.Vertical
+                  LayoutGap: =16
+                  LayoutMinHeight: =0
+                  LayoutMinWidth: =0
+                  LayoutOverflowY: =LayoutOverflow.Scroll
+                  PaddingBottom: =16
+                  PaddingLeft: =16
+                  PaddingRight: =16
+                  PaddingTop: =16
+                  RadiusBottomLeft: =0
+                  RadiusBottomRight: =0
+                  RadiusTopLeft: =0
+                  RadiusTopRight: =0
+                Children:
+                  - conHomeTiles:
+                      Control: GroupContainer
+                      Variant: AutoLayout
+                      Properties:
+                        DropShadow: =DropShadow.None
+                        Fill: =RGBA(252, 246, 233, 1)
+                        FillPortions: =0
+                        Height: =240
+                        LayoutAlignItems: =LayoutAlignItems.Stretch
+                        LayoutDirection: =LayoutDirection.Vertical
+                        LayoutGap: =12
+                        LayoutMinHeight: =0
+                        LayoutMinWidth: =0
+                        RadiusBottomLeft: =12
+                        RadiusBottomRight: =12
+                        RadiusTopLeft: =12
+                        RadiusTopRight: =12
+                      Children:
+                        - btnHomeNewContact:
+                            Control: ModernButton
+                            Properties:
+                              AccessibleLabel: ="New contact"
+                              Align: =Align.Left
+                              AlignInContainer: =AlignInContainer.Stretch
+                              BasePaletteColor: =RGBA(0, 72, 126, 1)
+                              Color: =RGBA(252, 248, 240, 1)
+                              Font: =Font.'Segoe UI'
+                              FontWeight: =FontWeight.Semibold
+                              Height: =72
+                              Layout: =ButtonLayout.TextOnly
+                              LayoutMinWidth: =160
+                              OnSelect: |-
+                                =Set(varReturnTo, "");
+                                Navigate(ScrContact, ScreenTransition.CoverRight)
+                              PaddingBottom: =0
+                              PaddingLeft: =20
+                              PaddingRight: =20
+                              PaddingTop: =0
+                              RadiusBottomLeft: =12
+                              RadiusBottomRight: =12
+                              RadiusTopLeft: =12
+                              RadiusTopRight: =12
+                              Size: =17
+                              Text: ="New contact"
+                              Tooltip: ="Create a new networking contact"
+                              VerticalAlign: =VerticalAlign.Middle
+                              Width: =Parent.Width
+                        - btnHomeLogInteraction:
+                            Control: ModernButton
+                            Properties:
+                              AccessibleLabel: ="Log interaction"
+                              Align: =Align.Left
+                              AlignInContainer: =AlignInContainer.Stretch
+                              BasePaletteColor: =RGBA(0, 72, 126, 1)
+                              Color: =RGBA(252, 248, 240, 1)
+                              Font: =Font.'Segoe UI'
+                              FontWeight: =FontWeight.Semibold
+                              Height: =72
+                              Layout: =ButtonLayout.TextOnly
+                              LayoutMinWidth: =160
+                              OnSelect: |-
+                                =Set(varReturnTo, "");
+                                Set(varPrefillContactId, "");
+                                Navigate(ScrInteraction, ScreenTransition.CoverRight)
+                              PaddingBottom: =0
+                              PaddingLeft: =20
+                              PaddingRight: =20
+                              PaddingTop: =0
+                              RadiusBottomLeft: =12
+                              RadiusBottomRight: =12
+                              RadiusTopLeft: =12
+                              RadiusTopRight: =12
+                              Size: =17
+                              Text: ="Log interaction"
+                              Tooltip: ="Log an interaction with a contact"
+                              VerticalAlign: =VerticalAlign.Middle
+                              Width: =Parent.Width
+                        - btnHomeNewFollowUp:
+                            Control: ModernButton
+                            Properties:
+                              AccessibleLabel: ="New follow-up"
+                              Align: =Align.Left
+                              AlignInContainer: =AlignInContainer.Stretch
+                              BasePaletteColor: =RGBA(0, 72, 126, 1)
+                              Color: =RGBA(252, 248, 240, 1)
+                              Font: =Font.'Segoe UI'
+                              FontWeight: =FontWeight.Semibold
+                              Height: =72
+                              Layout: =ButtonLayout.TextOnly
+                              LayoutMinWidth: =160
+                              OnSelect: |-
+                                =Set(varReturnTo, "");
+                                Set(varPrefillContactId, "");
+                                Navigate(ScrFollowUp, ScreenTransition.CoverRight)
+                              PaddingBottom: =0
+                              PaddingLeft: =20
+                              PaddingRight: =20
+                              PaddingTop: =0
+                              RadiusBottomLeft: =12
+                              RadiusBottomRight: =12
+                              RadiusTopLeft: =12
+                              RadiusTopRight: =12
+                              Size: =17
+                              Text: ="New follow-up"
+                              Tooltip: ="Create a new follow-up"
+                              VerticalAlign: =VerticalAlign.Middle
+                              Width: =Parent.Width
+                  - conHomeDueSection:
+                      Control: GroupContainer
+                      Variant: AutoLayout
+                      Properties:
+                        DropShadow: =DropShadow.None
+                        Fill: =RGBA(252, 246, 233, 1)
+                        FillPortions: =0
+                        Height: =32 + If(CountRows(colHomeDue) = 0, 60, 76 * CountRows(colHomeDue))
+                        LayoutAlignItems: =LayoutAlignItems.Stretch
+                        LayoutDirection: =LayoutDirection.Vertical
+                        LayoutGap: =8
+                        LayoutMinHeight: =0
+                        LayoutMinWidth: =0
+                        RadiusBottomLeft: =12
+                        RadiusBottomRight: =12
+                        RadiusTopLeft: =12
+                        RadiusTopRight: =12
+                      Children:
+                        - txtHomeDueHeading:
+                            Control: ModernText
+                            Properties:
+                              AccessibleLabel: ="Due today and overdue follow-ups"
+                              AlignInContainer: =AlignInContainer.Stretch
+                              Color: =RGBA(8, 19, 28, 1)
+                              Font: =Font.'Segoe UI'
+                              FontWeight: =FontWeight.Semibold
+                              Height: =30
+                              PaddingBottom: =0
+                              PaddingLeft: =7.5
+                              PaddingRight: =0
+                              PaddingTop: =0
+                              Size: =18
+                              Text: ="Due today & Overdue"
+                              Wrap: =false
+                        - txtHomeEmpty:
+                            Control: ModernText
+                            Properties:
+                              AccessibleLabel: ="Nothing due. Nice."
+                              Align: =Align.Center
+                              AlignInContainer: =AlignInContainer.Stretch
+                              Color: =RGBA(45, 63, 78, 1)
+                              Fill: =RGBA(255, 255, 255, 1)
+                              Font: =Font.'Segoe UI'
+                              Height: =60
+                              PaddingBottom: =0
+                              PaddingLeft: =0
+                              PaddingRight: =0
+                              PaddingTop: =0
+                              RadiusBottomLeft: =12
+                              RadiusBottomRight: =12
+                              RadiusTopLeft: =12
+                              RadiusTopRight: =12
+                              Size: =14
+                              Text: ="Nothing due. Nice."
+                              Visible: =CountRows(colHomeDue) = 0
+                              Wrap: =false
+                        - galHomeFollowUps:
+                            Control: Gallery
+                            Variant: Vertical
+                            Properties:
+                              AccessibleLabel: ="Follow-ups due today or overdue"
+                              BorderStyle: =BorderStyle.None
+                              FillPortions: =0
+                              Height: =76 * Max(CountRows(colHomeDue), 1)
+                              Items: =colHomeDue
+                              Selectable: =false
+                              ShowScrollbar: =false
+                              TabIndex: =0
+                              TemplatePadding: =4
+                              TemplateSize: =68
+                              Visible: =CountRows(colHomeDue) > 0
+                            Children:
+                              - conHomeRow:
+                                  Control: GroupContainer
+                                  Variant: AutoLayout
+                                  Properties:
+                                    BorderColor: =RGBA(211, 201, 185, 1)
+                                    BorderThickness: =1
+                                    Fill: =RGBA(255, 255, 255, 1)
+                                    Height: =Parent.TemplateHeight
+                                    LayoutAlignItems: =LayoutAlignItems.Center
+                                    LayoutDirection: =LayoutDirection.Horizontal
+                                    LayoutGap: =10
+                                    PaddingLeft: =14
+                                    PaddingRight: =10
+                                    RadiusBottomLeft: =12
+                                    RadiusBottomRight: =12
+                                    RadiusTopLeft: =12
+                                    RadiusTopRight: =12
+                                    Width: =Parent.TemplateWidth
+                                  Children:
+                                    - conHomeRowText:
+                                        Control: GroupContainer
+                                        Variant: AutoLayout
+                                        Properties:
+                                          AlignInContainer: =AlignInContainer.Center
+                                          DropShadow: =DropShadow.None
+                                          Fill: =RGBA(255, 255, 255, 1)
+                                          Height: =46
+                                          LayoutAlignItems: =LayoutAlignItems.Stretch
+                                          LayoutDirection: =LayoutDirection.Vertical
+                                          LayoutGap: =2
+                                          LayoutJustifyContent: =LayoutJustifyContent.Center
+                                          LayoutMinHeight: =0
+                                          LayoutMinWidth: =0
+                                          RadiusBottomLeft: =0
+                                          RadiusBottomRight: =0
+                                          RadiusTopLeft: =0
+                                          RadiusTopRight: =0
+                                        Children:
+                                          - txtHomeRowTitle:
+                                              Control: ModernText
+                                              Properties:
+                                                AccessibleLabel: |-
+                                                  ="Follow-up: " & ThisItem.cws_title
+                                                AlignInContainer: =AlignInContainer.Stretch
+                                                Color: =RGBA(8, 19, 28, 1)
+                                                Font: =Font.'Segoe UI'
+                                                FontWeight: =FontWeight.Semibold
+                                                Height: =24
+                                                OnSelect: |-
+                                                  =Set(varPromptFollowUpId, Text(ThisItem.cws_followupid));
+                                                  Set(varPromptTitle, ThisItem.cws_title);
+                                                  Set(
+                                                      varPromptContactId,
+                                                      If(
+                                                          ThisItem.cws_relatedtype = 'Related Type (Follow Ups)'.Contact,
+                                                          Text(ThisItem.cws_RelatedContact.cws_networkingcontactid),
+                                                          ""
+                                                      )
+                                                  );
+                                                  Set(
+                                                      varPromptAppId,
+                                                      If(
+                                                          ThisItem.cws_relatedtype = 'Related Type (Follow Ups)'.Application,
+                                                          Text(ThisItem.cws_RelatedApplication.cws_jobapplicationid),
+                                                          ""
+                                                      )
+                                                  );
+                                                  Set(varShowLogPrompt, true)
+                                                PaddingBottom: =0
+                                                PaddingLeft: =0
+                                                PaddingRight: =0
+                                                PaddingTop: =0
+                                                Size: =15
+                                                Text: =ThisItem.cws_title
+                                                Wrap: =false
+                                          - txtHomeRowDue:
+                                              Control: ModernText
+                                              Properties:
+                                                AccessibleLabel: ="Due " & Text(ThisItem.cws_duedate, DateTimeFormat.ShortDate)
+                                                AlignInContainer: =AlignInContainer.Stretch
+                                                Color: =RGBA(45, 63, 78, 1)
+                                                Font: =Font.'Segoe UI'
+                                                Height: =18
+                                                PaddingBottom: =0
+                                                PaddingLeft: =0
+                                                PaddingRight: =0
+                                                PaddingTop: =0
+                                                Size: =12
+                                                Text: ="Due " & Text(ThisItem.cws_duedate, DateTimeFormat.ShortDate)
+                                                Wrap: =false
+                                    - bdgHomeRowBucket:
+                                        Control: Badge
+                                        Properties:
+                                          AccessibleLabel: |-
+                                            =If(
+                                                Date(Year(ThisItem.cws_duedate), Month(ThisItem.cws_duedate), Day(ThisItem.cws_duedate)) < Today(),
+                                                "Overdue",
+                                                "Due today"
+                                            )
+                                          Align: =Align.Center
+                                          AlignInContainer: =AlignInContainer.Center
+                                          Appearance: ='BadgeCanvas.Appearance'.Tint
+                                          Content: |-
+                                            =If(
+                                                Date(Year(ThisItem.cws_duedate), Month(ThisItem.cws_duedate), Day(ThisItem.cws_duedate)) < Today(),
+                                                "Overdue",
+                                                "Today"
+                                            )
+                                          Font: =Font.'Segoe UI'
+                                          FontSize: =11
+                                          FontWeight: =FontWeight.Semibold
+                                          Height: =24
+                                          LayoutMinWidth: =78
+                                          Shape: ='BadgeCanvas.Shape'.Rounded
+                                          ThemeColor: |-
+                                            =If(
+                                                Date(Year(ThisItem.cws_duedate), Month(ThisItem.cws_duedate), Day(ThisItem.cws_duedate)) < Today(),
+                                                'BadgeCanvas.ThemeColor'.Danger,
+                                                'BadgeCanvas.ThemeColor'.Warning
+                                            )
+                                          VerticalAlign: =VerticalAlign.Middle
+                                          Width: =78
+                                    - btnHomeRowComplete:
+                                        Control: ModernButton
+                                        Properties:
+                                          AccessibleLabel: ="Complete " & ThisItem.cws_title
+                                          AlignInContainer: =AlignInContainer.Center
+                                          BasePaletteColor: =RGBA(0, 72, 126, 1)
+                                          Color: =RGBA(252, 248, 240, 1)
+                                          Height: =52
+                                          Icon: ="Checkmark"
+                                          IconStyle: =IconStyle.Filled
+                                          Layout: =ButtonLayout.IconOnly
+                                          LayoutMinWidth: =52
+                                          OnSelect: |-
+                                            =Set(varPromptFollowUpId, Text(ThisItem.cws_followupid));
+                                            Set(varPromptTitle, ThisItem.cws_title);
+                                            Set(
+                                                varPromptContactId,
+                                                If(
+                                                    ThisItem.cws_relatedtype = 'Related Type (Follow Ups)'.Contact,
+                                                    Text(ThisItem.cws_RelatedContact.cws_networkingcontactid),
+                                                    ""
+                                                )
+                                            );
+                                            Set(
+                                                varPromptAppId,
+                                                If(
+                                                    ThisItem.cws_relatedtype = 'Related Type (Follow Ups)'.Application,
+                                                    Text(ThisItem.cws_RelatedApplication.cws_jobapplicationid),
+                                                    ""
+                                                )
+                                            );
+                                            Set(varShowLogPrompt, true)
+                                          PaddingBottom: =0
+                                          PaddingLeft: =0
+                                          PaddingRight: =0
+                                          PaddingTop: =0
+                                          RadiusBottomLeft: =12
+                                          RadiusBottomRight: =12
+                                          RadiusTopLeft: =12
+                                          RadiusTopRight: =12
+                                          Text: =""
+                                          Tooltip: ="Complete this follow-up"
+                                          Width: =52
+      - conHomeOverlay:
+          Control: GroupContainer
+          Variant: ManualLayout
+          Properties:
+            Height: =Parent.Height
+            Visible: =varShowLogPrompt
+            Width: =Parent.Width
+            X: =0
+            Y: =0
+          Children:
+            - txtHomeScrim:
+                Control: ModernText
+                Properties:
+                  AccessibleLabel: ="Dismiss dialog"
+                  Fill: =RGBA(8, 19, 28, 0.55)
+                  Height: =Parent.Height
+                  OnSelect: |-
+                    =Set(varShowLogPrompt, false);
+                    Set(varPromptFollowUpId, "");
+                    Set(varPromptContactId, "");
+                    Set(varPromptAppId, "");
+                    Set(varPromptTitle, "")
+                  PaddingBottom: =0
+                  PaddingLeft: =0
+                  PaddingRight: =0
+                  PaddingTop: =0
+                  Text: =""
+                  Width: =Parent.Width
+                  Wrap: =false
+                  X: =0
+                  Y: =0
+            - conHomeDialog:
+                Control: GroupContainer
+                Variant: AutoLayout
+                Properties:
+                  Fill: =RGBA(255, 255, 255, 1)
+                  Height: =252
+                  LayoutAlignItems: =LayoutAlignItems.Stretch
+                  LayoutDirection: =LayoutDirection.Vertical
+                  LayoutGap: =12
+                  PaddingBottom: =20
+                  PaddingLeft: =20
+                  PaddingRight: =20
+                  PaddingTop: =20
+                  RadiusBottomLeft: =12
+                  RadiusBottomRight: =12
+                  RadiusTopLeft: =12
+                  RadiusTopRight: =12
+                  Width: =Min(Parent.Width - 48, 380)
+                  X: =(Parent.Width - Self.Width) / 2
+                  Y: =(Parent.Height - Self.Height) / 2
+                Children:
+                  - txtHomeDlgTitle:
+                      Control: ModernText
+                      Properties:
+                        AccessibleLabel: ="Log an interaction?"
+                        AlignInContainer: =AlignInContainer.Stretch
+                        Color: =RGBA(8, 19, 28, 1)
+                        FillPortions: =0
+                        Font: =Font.'Segoe UI'
+                        FontWeight: =FontWeight.Semibold
+                        Height: =28
+                        PaddingBottom: =0
+                        PaddingLeft: =0
+                        PaddingRight: =0
+                        PaddingTop: =0
+                        Size: =18
+                        Text: ="Log an interaction?"
+                        Wrap: =false
+                  - txtHomeDlgBody:
+                      Control: ModernText
+                      Properties:
+                        AccessibleLabel: ="Follow-up " & varPromptTitle
+                        AlignInContainer: =AlignInContainer.Stretch
+                        Color: =RGBA(45, 63, 78, 1)
+                        FillPortions: =0
+                        Font: =Font.'Segoe UI'
+                        Height: =44
+                        PaddingBottom: =0
+                        PaddingLeft: =0
+                        PaddingRight: =0
+                        PaddingTop: =0
+                        Size: =13
+                        Text: =varPromptTitle
+                        Wrap: =true
+                  - btnHomeDlgCompleteLog:
+                      Control: ModernButton
+                      Properties:
+                        AccessibleLabel: ="Complete this follow-up and log an interaction"
+                        AlignInContainer: =AlignInContainer.Stretch
+                        Appearance: =ButtonAppearance.Primary
+                        BasePaletteColor: =RGBA(0, 72, 126, 1)
+                        Color: =RGBA(252, 248, 240, 1)
+                        FillPortions: =0
+                        Font: =Font.'Segoe UI'
+                        FontWeight: =FontWeight.Semibold
+                        Height: =52
+                        Layout: =ButtonLayout.TextOnly
+                        OnSelect: |-
+                          =Patch(
+                              'Follow Ups',
+                              LookUp('Follow Ups', cws_followupid = GUID(varPromptFollowUpId)),
+                              { cws_status: 'Status (Follow Ups)'.Completed,
+                                cws_completeddate: Today() }
+                          );
+                          RemoveIf(colHomeDue, cws_followupid = GUID(varPromptFollowUpId));
+                          RemoveIf(colHomeOpen, cws_followupid = GUID(varPromptFollowUpId));
+                          Set(varPrefillContactId, varPromptContactId);
+                          Set(varPrefillAppId, varPromptAppId);
+                          Set(varPrefillIntxName, varPromptTitle);
+                          Set(
+                              varIntxCompanyId,
+                              If(
+                                  Len(varPromptContactId) > 0,
+                                  Text(LookUp('Networking Contacts', cws_networkingcontactid = GUID(varPromptContactId)).cws_Company.cws_companyid),
+                                  Len(varPromptAppId) > 0,
+                                  Text(LookUp('Job Applications', cws_jobapplicationid = GUID(varPromptAppId)).cws_Company.cws_companyid),
+                                  ""
+                              )
+                          );
+                          Set(varReturnTo, "");
+                          Set(varShowLogPrompt, false);
+                          Set(varPromptFollowUpId, "");
+                          Set(varPromptContactId, "");
+                          Set(varPromptAppId, "");
+                          Set(varPromptTitle, "");
+                          Navigate(ScrInteraction, ScreenTransition.CoverRight)
+                        RadiusBottomLeft: =12
+                        RadiusBottomRight: =12
+                        RadiusTopLeft: =12
+                        RadiusTopRight: =12
+                        Size: =16
+                        Text: ="Complete + log"
+                        Tooltip: ="Complete this follow-up and log an interaction"
+                        Width: =Parent.Width - 40
+                  - conHomeDlgRow:
+                      Control: GroupContainer
+                      Variant: AutoLayout
+                      Properties:
+                        AlignInContainer: =AlignInContainer.Stretch
+                        Fill: =RGBA(255, 255, 255, 1)
+                        FillPortions: =0
+                        Height: =52
+                        LayoutAlignItems: =LayoutAlignItems.Stretch
+                        LayoutDirection: =LayoutDirection.Horizontal
+                        LayoutGap: =12
+                        LayoutMinHeight: =52
+                        LayoutMinWidth: =0
+                      Children:
+                        - btnHomeDlgComplete:
+                            Control: ModernButton
+                            Properties:
+                              AccessibleLabel: ="Complete this follow-up without logging an interaction"
+                              AlignInContainer: =AlignInContainer.Stretch
+                              Appearance: =ButtonAppearance.Secondary
+                              BasePaletteColor: =RGBA(232, 221, 196, 1)
+                              Color: =RGBA(8, 19, 28, 1)
+                              FillPortions: =1
+                              Font: =Font.'Segoe UI'
+                              FontWeight: =FontWeight.Semibold
+                              Height: =52
+                              Layout: =ButtonLayout.TextOnly
+                              LayoutMinWidth: =120
+                              OnSelect: |-
+                                =Patch(
+                                    'Follow Ups',
+                                    LookUp('Follow Ups', cws_followupid = GUID(varPromptFollowUpId)),
+                                    { cws_status: 'Status (Follow Ups)'.Completed,
+                                      cws_completeddate: Today() }
+                                );
+                                RemoveIf(colHomeDue, cws_followupid = GUID(varPromptFollowUpId));
+                                RemoveIf(colHomeOpen, cws_followupid = GUID(varPromptFollowUpId));
+                                Set(varShowLogPrompt, false);
+                                Set(varPromptFollowUpId, "");
+                                Set(varPromptContactId, "");
+                                Set(varPromptAppId, "");
+                                Set(varPromptTitle, "")
+                              RadiusBottomLeft: =12
+                              RadiusBottomRight: =12
+                              RadiusTopLeft: =12
+                              RadiusTopRight: =12
+                              Size: =15
+                              Text: ="Complete"
+                              Tooltip: ="Complete without logging an interaction"
+                        - btnHomeDlgCancel:
+                            Control: ModernButton
+                            Properties:
+                              AccessibleLabel: ="Cancel, leave this follow-up open"
+                              AlignInContainer: =AlignInContainer.Stretch
+                              Appearance: =ButtonAppearance.Outline
+                              BorderColor: =RGBA(211, 201, 185, 1)
+                              Color: =RGBA(45, 63, 78, 1)
+                              FillPortions: =1
+                              Font: =Font.'Segoe UI'
+                              FontWeight: =FontWeight.Semibold
+                              Height: =52
+                              Layout: =ButtonLayout.TextOnly
+                              LayoutMinWidth: =120
+                              OnSelect: |-
+                                =Set(varShowLogPrompt, false);
+                                Set(varPromptFollowUpId, "");
+                                Set(varPromptContactId, "");
+                                Set(varPromptAppId, "");
+                                Set(varPromptTitle, "")
+                              RadiusBottomLeft: =12
+                              RadiusBottomRight: =12
+                              RadiusTopLeft: =12
+                              RadiusTopRight: =12
+                              Size: =15
+                              Text: ="Cancel"
+                              Tooltip: ="Leave this follow-up open"

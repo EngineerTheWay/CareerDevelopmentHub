@@ -1,0 +1,808 @@
+Screens:
+  ScrContact:
+    Properties:
+      Fill: =RGBA(252, 246, 233, 1)
+      OnVisible: |-
+        =Set(varContCompany, Blank());
+        Set(varContGroup, Blank())
+    Children:
+      - conContRoot:
+          Control: GroupContainer
+          Variant: AutoLayout
+          Properties:
+            Fill: =RGBA(252, 246, 233, 1)
+            Height: =Parent.Height
+            LayoutAlignItems: =LayoutAlignItems.Stretch
+            LayoutDirection: =LayoutDirection.Vertical
+            Width: =Parent.Width
+          Children:
+            - conContTopBar:
+                Control: GroupContainer
+                Variant: AutoLayout
+                Properties:
+                  Fill: =RGBA(0, 72, 126, 1)
+                  FillPortions: =0
+                  Height: =56
+                  LayoutAlignItems: =LayoutAlignItems.Center
+                  LayoutDirection: =LayoutDirection.Horizontal
+                  LayoutGap: =8
+                  LayoutMinHeight: =56
+                  LayoutMinWidth: =0
+                  PaddingLeft: =6
+                  PaddingRight: =16
+                  RadiusBottomLeft: =0
+                  RadiusBottomRight: =0
+                  RadiusTopLeft: =0
+                  RadiusTopRight: =0
+                Children:
+                  - icoContBack:
+                      Control: ModernIcon
+                      Properties:
+                        AccessibleLabel: ="Back"
+                        AlignInContainer: =AlignInContainer.Center
+                        Height: =44
+                        Icon: ="ChevronLeft"
+                        IconColor: =RGBA(252, 248, 240, 1)
+                        IconStyle: =IconStyle.Filled
+                        LayoutMinWidth: =44
+                        OnSelect: |-
+                          =If(
+                              varReturnTo = "Interaction",
+                              Navigate(ScrInteraction, ScreenTransition.UnCoverRight),
+                              Navigate(Screen1, ScreenTransition.UnCoverRight)
+                          );
+                          Set(varReturnTo, "")
+                        Tooltip: ="Back"
+                        Width: =44
+                  - txtContTitle:
+                      Control: ModernText
+                      Properties:
+                        AccessibleLabel: ="New contact"
+                        AlignInContainer: =AlignInContainer.Stretch
+                        Color: =RGBA(252, 248, 240, 1)
+                        FillPortions: =1
+                        Font: =Font.'Segoe UI'
+                        FontWeight: =FontWeight.Semibold
+                        Height: =44
+                        PaddingBottom: =0
+                        PaddingLeft: =0
+                        PaddingRight: =0
+                        PaddingTop: =0
+                        Size: =18
+                        Text: ="New contact"
+                        Wrap: =false
+            - conContBody:
+                Control: GroupContainer
+                Variant: AutoLayout
+                Properties:
+                  Fill: =RGBA(252, 246, 233, 1)
+                  LayoutAlignItems: =LayoutAlignItems.Stretch
+                  LayoutDirection: =LayoutDirection.Vertical
+                  LayoutGap: =16
+                  LayoutMinHeight: =0
+                  LayoutMinWidth: =0
+                  LayoutOverflowY: =LayoutOverflow.Scroll
+                  PaddingBottom: =16
+                  PaddingLeft: =16
+                  PaddingRight: =16
+                  PaddingTop: =16
+                Children:
+                  - conContFldName:
+                      Control: GroupContainer
+                      Variant: AutoLayout
+                      Properties:
+                        DropShadow: =DropShadow.None
+                        Fill: =RGBA(252, 246, 233, 1)
+                        FillPortions: =0
+                        Height: =72
+                        LayoutAlignItems: =LayoutAlignItems.Stretch
+                        LayoutDirection: =LayoutDirection.Vertical
+                        LayoutGap: =6
+                        LayoutMinHeight: =0
+                        LayoutMinWidth: =0
+                      Children:
+                        - txtContNameLabel:
+                            Control: ModernText
+                            Properties:
+                              AccessibleLabel: ="Contact name, required"
+                              AlignInContainer: =AlignInContainer.Stretch
+                              Color: =RGBA(45, 63, 78, 1)
+                              Font: =Font.'Segoe UI'
+                              FontWeight: =FontWeight.Semibold
+                              Height: =18
+                              PaddingBottom: =0
+                              PaddingLeft: =0
+                              PaddingRight: =0
+                              PaddingTop: =0
+                              Size: =12
+                              Text: ="Contact name *"
+                              Wrap: =false
+                        - inpContName:
+                            Control: ModernTextInput
+                            Properties:
+                              AccessibleLabel: ="Contact name"
+                              AlignInContainer: =AlignInContainer.Stretch
+                              Appearance: =Appearance.Outline
+                              BorderColor: =RGBA(211, 201, 185, 1)
+                              Color: =RGBA(8, 19, 28, 1)
+                              Fill: =RGBA(255, 255, 255, 1)
+                              Font: =Font.'Segoe UI'
+                              Height: =48
+                              MaxLength: =100
+                              Placeholder: ="Who did you meet?"
+                              RadiusBottomLeft: =12
+                              RadiusBottomRight: =12
+                              RadiusTopLeft: =12
+                              RadiusTopRight: =12
+                              Size: =15
+                  - conContFldCompany:
+                      Control: GroupContainer
+                      Variant: AutoLayout
+                      Properties:
+                        DropShadow: =DropShadow.None
+                        Fill: =RGBA(252, 246, 233, 1)
+                        FillPortions: =0
+                        Height: =72
+                        LayoutAlignItems: =LayoutAlignItems.Stretch
+                        LayoutDirection: =LayoutDirection.Vertical
+                        LayoutGap: =6
+                        LayoutMinHeight: =0
+                        LayoutMinWidth: =0
+                      Children:
+                        - txtContCompanyLabel:
+                            Control: ModernText
+                            Properties:
+                              AccessibleLabel: ="Company, required"
+                              AlignInContainer: =AlignInContainer.Stretch
+                              Color: =RGBA(45, 63, 78, 1)
+                              Font: =Font.'Segoe UI'
+                              FontWeight: =FontWeight.Semibold
+                              Height: =18
+                              PaddingBottom: =0
+                              PaddingLeft: =0
+                              PaddingRight: =0
+                              PaddingTop: =0
+                              Size: =12
+                              Text: ="Company *"
+                              Wrap: =false
+                        - conContCompanyChosen:
+                            Control: GroupContainer
+                            Variant: AutoLayout
+                            Properties:
+                              DropShadow: =DropShadow.None
+                              Fill: =RGBA(232, 221, 196, 1)
+                              FillPortions: =0
+                              Height: =48
+                              LayoutAlignItems: =LayoutAlignItems.Center
+                              LayoutDirection: =LayoutDirection.Horizontal
+                              LayoutGap: =8
+                              LayoutMinHeight: =0
+                              LayoutMinWidth: =0
+                              PaddingLeft: =12
+                              PaddingRight: =8
+                              RadiusBottomLeft: =12
+                              RadiusBottomRight: =12
+                              RadiusTopLeft: =12
+                              RadiusTopRight: =12
+                              Visible: =!IsBlank(varContCompany)
+                            Children:
+                              - txtContCompanyName:
+                                  Control: ModernText
+                                  Properties:
+                                    AccessibleLabel: ="Selected company " & varContCompany.cws_companyname
+                                    AlignInContainer: =AlignInContainer.Stretch
+                                    Color: =RGBA(8, 19, 28, 1)
+                                    FillPortions: =1
+                                    Font: =Font.'Segoe UI'
+                                    FontWeight: =FontWeight.Semibold
+                                    Height: =44
+                                    PaddingBottom: =0
+                                    PaddingLeft: =0
+                                    PaddingRight: =0
+                                    PaddingTop: =0
+                                    Size: =15
+                                    Text: =varContCompany.cws_companyname
+                                    Wrap: =false
+                              - btnContClearCompany:
+                                  Control: ModernButton
+                                  Properties:
+                                    AccessibleLabel: ="Clear company"
+                                    AlignInContainer: =AlignInContainer.Center
+                                    Appearance: =ButtonAppearance.Transparent
+                                    Color: =RGBA(8, 19, 28, 1)
+                                    Font: =Font.'Segoe UI'
+                                    Height: =44
+                                    Icon: ="Dismiss"
+                                    IconStyle: =IconStyle.Filled
+                                    Layout: =ButtonLayout.IconOnly
+                                    LayoutMinWidth: =44
+                                    OnSelect: |-
+                                      =Set(varContCompany, Blank());
+                                      Set(varContGroup, Blank());
+                                      Reset(cmbContCompany);
+                                      Reset(cmbContGroup)
+                                    Text: =""
+                                    Tooltip: ="Change company"
+                                    Width: =44
+                        - cmbContCompany:
+                            Control: ModernCombobox
+                            Properties:
+                              AccessibleLabel: ="Company, search or create"
+                              AlignInContainer: =AlignInContainer.Stretch
+                              AllowExternalSelectedItems: =true
+                              Appearance: =Appearance.Outline
+                              BorderColor: =RGBA(211, 201, 185, 1)
+                              Color: =RGBA(8, 19, 28, 1)
+                              Fill: =RGBA(255, 255, 255, 1)
+                              FillPortions: =0
+                              Font: =Font.'Segoe UI'
+                              Height: =48
+                              InputTextPlaceholder: ="Search or type a new company"
+                              IsSearchable: =true
+                              ItemDisplayText: |-
+                                =If(
+                                    ThisItem.IsNew,
+                                    "Create """ & ThisItem.OptName & """",
+                                    ThisItem.OptName
+                                )
+                              Items: |-
+                                =With(
+                                    { s: Trim(cmbContCompany.SearchText) },
+                                    With(
+                                        {
+                                            m: FirstN(
+                                                   SortByColumns(
+                                                       Filter(Companies, StartsWith(cws_companyname, Trim(cmbContCompany.SearchText))),
+                                                       "cws_companyname",
+                                                       SortOrder.Ascending
+                                                   ),
+                                                   20
+                                               ),
+                                            show: Len(s) > 0 && IsBlank(LookUp(Companies, cws_companyname = s))
+                                        },
+                                        ForAll(
+                                            Sequence(CountRows(m) + If(show, 1, 0)) As i,
+                                            If(
+                                                i.Value <= CountRows(m),
+                                                { OptId: Text(Index(m, i.Value).cws_companyid), OptName: Index(m, i.Value).cws_companyname, IsNew: false },
+                                                { OptId: "", OptName: s, IsNew: true }
+                                            )
+                                        )
+                                    )
+                                )
+                              OnChange: |-
+                                =If(
+                                    CountRows(cmbContCompany.SelectedItems) = 0,
+                                    Set(varContCompany, Blank()),
+                                    cmbContCompany.Selected.IsNew,
+                                    Set(
+                                        varContCompany,
+                                        Patch(Companies, Defaults(Companies), { cws_companyname: cmbContCompany.Selected.OptName })
+                                    ),
+                                    Set(varContCompany, LookUp(Companies, cws_companyid = GUID(cmbContCompany.Selected.OptId)))
+                                );
+                                Set(varContGroup, Blank());
+                                Reset(cmbContGroup)
+                              RadiusBottomLeft: =12
+                              RadiusBottomRight: =12
+                              RadiusTopLeft: =12
+                              RadiusTopRight: =12
+                              SelectMultiple: =false
+                              Size: =15
+                              Visible: =IsBlank(varContCompany)
+                  - conContFldGroup:
+                      Control: GroupContainer
+                      Variant: AutoLayout
+                      Properties:
+                        DropShadow: =DropShadow.None
+                        Fill: =RGBA(252, 246, 233, 1)
+                        FillPortions: =0
+                        Height: =96
+                        LayoutAlignItems: =LayoutAlignItems.Stretch
+                        LayoutDirection: =LayoutDirection.Vertical
+                        LayoutGap: =6
+                        LayoutMinHeight: =0
+                        LayoutMinWidth: =0
+                      Children:
+                        - txtContGroupLabel:
+                            Control: ModernText
+                            Properties:
+                              AccessibleLabel: ="Business group"
+                              AlignInContainer: =AlignInContainer.Stretch
+                              Color: =RGBA(45, 63, 78, 1)
+                              Font: =Font.'Segoe UI'
+                              FontWeight: =FontWeight.Semibold
+                              Height: =18
+                              PaddingBottom: =0
+                              PaddingLeft: =0
+                              PaddingRight: =0
+                              PaddingTop: =0
+                              Size: =12
+                              Text: ="Business group"
+                              Wrap: =false
+                        - conContGroupChosen:
+                            Control: GroupContainer
+                            Variant: AutoLayout
+                            Properties:
+                              DropShadow: =DropShadow.None
+                              Fill: =RGBA(232, 221, 196, 1)
+                              FillPortions: =0
+                              Height: =48
+                              LayoutAlignItems: =LayoutAlignItems.Center
+                              LayoutDirection: =LayoutDirection.Horizontal
+                              LayoutGap: =8
+                              LayoutMinHeight: =0
+                              LayoutMinWidth: =0
+                              PaddingLeft: =12
+                              PaddingRight: =8
+                              RadiusBottomLeft: =12
+                              RadiusBottomRight: =12
+                              RadiusTopLeft: =12
+                              RadiusTopRight: =12
+                              Visible: =!IsBlank(varContGroup)
+                            Children:
+                              - txtContGroupName:
+                                  Control: ModernText
+                                  Properties:
+                                    AccessibleLabel: ="Selected business group " & varContGroup.cws_businessgroupname
+                                    AlignInContainer: =AlignInContainer.Stretch
+                                    Color: =RGBA(8, 19, 28, 1)
+                                    FillPortions: =1
+                                    Font: =Font.'Segoe UI'
+                                    FontWeight: =FontWeight.Semibold
+                                    Height: =44
+                                    PaddingBottom: =0
+                                    PaddingLeft: =0
+                                    PaddingRight: =0
+                                    PaddingTop: =0
+                                    Size: =15
+                                    Text: =varContGroup.cws_businessgroupname
+                                    Wrap: =false
+                              - btnContClearGroup:
+                                  Control: ModernButton
+                                  Properties:
+                                    AccessibleLabel: ="Clear business group"
+                                    AlignInContainer: =AlignInContainer.Center
+                                    Appearance: =ButtonAppearance.Transparent
+                                    Color: =RGBA(8, 19, 28, 1)
+                                    FillPortions: =0
+                                    Font: =Font.'Segoe UI'
+                                    Height: =44
+                                    Icon: ="Dismiss"
+                                    IconStyle: =IconStyle.Filled
+                                    Layout: =ButtonLayout.IconOnly
+                                    LayoutMinWidth: =44
+                                    OnSelect: |-
+                                      =Set(varContGroup, Blank());
+                                      Reset(cmbContGroup)
+                                    Text: =""
+                                    Tooltip: ="Change business group"
+                                    Width: =44
+                        - cmbContGroup:
+                            Control: ModernCombobox
+                            Properties:
+                              AccessibleLabel: ="Business group, search or create"
+                              AlignInContainer: =AlignInContainer.Stretch
+                              AllowExternalSelectedItems: =true
+                              Appearance: =Appearance.Outline
+                              BorderColor: =RGBA(211, 201, 185, 1)
+                              Color: =RGBA(8, 19, 28, 1)
+                              DisplayMode: =If(IsBlank(varContCompany), DisplayMode.Disabled, DisplayMode.Edit)
+                              Fill: =RGBA(255, 255, 255, 1)
+                              FillPortions: =0
+                              Font: =Font.'Segoe UI'
+                              Height: =48
+                              InputTextPlaceholder: ="Optional"
+                              IsSearchable: =true
+                              ItemDisplayText: |-
+                                =If(
+                                    ThisItem.IsNew,
+                                    "Create """ & ThisItem.OptName & """",
+                                    ThisItem.OptName
+                                )
+                              Items: |-
+                                =With(
+                                    { s: Trim(cmbContGroup.SearchText) },
+                                    With(
+                                        {
+                                            m: FirstN(
+                                                   SortByColumns(
+                                                       Filter(
+                                                           'Business Groups',
+                                                           cws_Company.cws_companyid = varContCompany.cws_companyid,
+                                                           StartsWith(cws_businessgroupname, Trim(cmbContGroup.SearchText))
+                                                       ),
+                                                       "cws_businessgroupname",
+                                                       SortOrder.Ascending
+                                                   ),
+                                                   20
+                                               ),
+                                            show: !IsBlank(varContCompany)
+                                                    && Len(s) > 0
+                                                    && IsBlank(
+                                                           LookUp(
+                                                               'Business Groups',
+                                                               cws_Company.cws_companyid = varContCompany.cws_companyid
+                                                                 && cws_businessgroupname = s
+                                                           )
+                                                       )
+                                        },
+                                        ForAll(
+                                            Sequence(CountRows(m) + If(show, 1, 0)) As i,
+                                            If(
+                                                i.Value <= CountRows(m),
+                                                { OptId: Text(Index(m, i.Value).cws_businessgroupid), OptName: Index(m, i.Value).cws_businessgroupname, IsNew: false },
+                                                { OptId: "", OptName: s, IsNew: true }
+                                            )
+                                        )
+                                    )
+                                )
+                              OnChange: |-
+                                =If(
+                                    CountRows(cmbContGroup.SelectedItems) = 0,
+                                    Set(varContGroup, Blank()),
+                                    cmbContGroup.Selected.IsNew,
+                                    Set(
+                                        varContGroup,
+                                        Patch(
+                                            'Business Groups',
+                                            Defaults('Business Groups'),
+                                            { cws_businessgroupname: cmbContGroup.Selected.OptName,
+                                              cws_Company: varContCompany }
+                                        )
+                                    ),
+                                    Set(varContGroup, LookUp('Business Groups', cws_businessgroupid = GUID(cmbContGroup.Selected.OptId)))
+                                )
+                              RadiusBottomLeft: =12
+                              RadiusBottomRight: =12
+                              RadiusTopLeft: =12
+                              RadiusTopRight: =12
+                              SelectMultiple: =false
+                              Size: =15
+                              Visible: =IsBlank(varContGroup)
+                        - txtContGroupHint:
+                            Control: ModernText
+                            Properties:
+                              AccessibleLabel: ="Business group hint"
+                              AlignInContainer: =AlignInContainer.Stretch
+                              Color: =RGBA(45, 63, 78, 1)
+                              Font: =Font.'Segoe UI'
+                              Height: =18
+                              PaddingBottom: =0
+                              PaddingLeft: =0
+                              PaddingRight: =0
+                              PaddingTop: =0
+                              Size: =11
+                              Text: |-
+                                =If(
+                                    IsBlank(varContCompany),
+                                    "Enter a company first",
+                                    "No groups yet for " & varContCompany.cws_companyname
+                                )
+                              Visible: |-
+                                =IsBlank(varContGroup)
+                                && (
+                                     IsBlank(varContCompany)
+                                     || CountRows(Filter('Business Groups', cws_Company.cws_companyid = varContCompany.cws_companyid)) = 0
+                                   )
+                              Wrap: =false
+                  - conContFldRel:
+                      Control: GroupContainer
+                      Variant: AutoLayout
+                      Properties:
+                        DropShadow: =DropShadow.None
+                        Fill: =RGBA(252, 246, 233, 1)
+                        FillPortions: =0
+                        Height: =72
+                        LayoutAlignItems: =LayoutAlignItems.Stretch
+                        LayoutDirection: =LayoutDirection.Vertical
+                        LayoutGap: =6
+                        LayoutMinHeight: =0
+                        LayoutMinWidth: =0
+                      Children:
+                        - txtContRelLabel:
+                            Control: ModernText
+                            Properties:
+                              AccessibleLabel: ="Relationship, required"
+                              AlignInContainer: =AlignInContainer.Stretch
+                              Color: =RGBA(45, 63, 78, 1)
+                              Font: =Font.'Segoe UI'
+                              FontWeight: =FontWeight.Semibold
+                              Height: =18
+                              PaddingBottom: =0
+                              PaddingLeft: =0
+                              PaddingRight: =0
+                              PaddingTop: =0
+                              Size: =12
+                              Text: ="Relationship *"
+                              Wrap: =false
+                        - ddContRelationship:
+                            Control: ModernDropdown
+                            Properties:
+                              AccessibleLabel: ="Relationship"
+                              AlignInContainer: =AlignInContainer.Stretch
+                              Appearance: =Appearance.Outline
+                              BorderColor: =RGBA(211, 201, 185, 1)
+                              Color: =RGBA(8, 19, 28, 1)
+                              Fill: =RGBA(255, 255, 255, 1)
+                              Font: =Font.'Segoe UI'
+                              Height: =48
+                              ItemDisplayText: =ThisItem.Label
+                              Items: |-
+                                =Table(
+                                    { Label: "New",            Val: 'Relationship (Networking Contacts)'.New },
+                                    { Label: "Recruiter",      Val: 'Relationship (Networking Contacts)'.Recruiter },
+                                    { Label: "Hiring Manager", Val: 'Relationship (Networking Contacts)'.'Hiring Manager' },
+                                    { Label: "Warm",           Val: 'Relationship (Networking Contacts)'.Warm },
+                                    { Label: "Mentor",         Val: 'Relationship (Networking Contacts)'.Mentor },
+                                    { Label: "Dormant",        Val: 'Relationship (Networking Contacts)'.Dormant }
+                                )
+                              RadiusBottomLeft: =12
+                              RadiusBottomRight: =12
+                              RadiusTopLeft: =12
+                              RadiusTopRight: =12
+                              Size: =15
+                  - conContFldRole:
+                      Control: GroupContainer
+                      Variant: AutoLayout
+                      Properties:
+                        DropShadow: =DropShadow.None
+                        Fill: =RGBA(252, 246, 233, 1)
+                        FillPortions: =0
+                        Height: =72
+                        LayoutAlignItems: =LayoutAlignItems.Stretch
+                        LayoutDirection: =LayoutDirection.Vertical
+                        LayoutGap: =6
+                        LayoutMinHeight: =0
+                        LayoutMinWidth: =0
+                      Children:
+                        - txtContRoleLabel:
+                            Control: ModernText
+                            Properties:
+                              AccessibleLabel: ="Role"
+                              AlignInContainer: =AlignInContainer.Stretch
+                              Color: =RGBA(45, 63, 78, 1)
+                              Font: =Font.'Segoe UI'
+                              FontWeight: =FontWeight.Semibold
+                              Height: =18
+                              PaddingBottom: =0
+                              PaddingLeft: =0
+                              PaddingRight: =0
+                              PaddingTop: =0
+                              Size: =12
+                              Text: ="Role"
+                              Wrap: =false
+                        - inpContRole:
+                            Control: ModernTextInput
+                            Properties:
+                              AccessibleLabel: ="Role"
+                              AlignInContainer: =AlignInContainer.Stretch
+                              Appearance: =Appearance.Outline
+                              BorderColor: =RGBA(211, 201, 185, 1)
+                              Color: =RGBA(8, 19, 28, 1)
+                              Fill: =RGBA(255, 255, 255, 1)
+                              Font: =Font.'Segoe UI'
+                              Height: =48
+                              MaxLength: =100
+                              Placeholder: ="Title or role"
+                              RadiusBottomLeft: =12
+                              RadiusBottomRight: =12
+                              RadiusTopLeft: =12
+                              RadiusTopRight: =12
+                              Size: =15
+                  - conContFldEmail:
+                      Control: GroupContainer
+                      Variant: AutoLayout
+                      Properties:
+                        DropShadow: =DropShadow.None
+                        Fill: =RGBA(252, 246, 233, 1)
+                        FillPortions: =0
+                        Height: =72
+                        LayoutAlignItems: =LayoutAlignItems.Stretch
+                        LayoutDirection: =LayoutDirection.Vertical
+                        LayoutGap: =6
+                        LayoutMinHeight: =0
+                        LayoutMinWidth: =0
+                      Children:
+                        - txtContEmailLabel:
+                            Control: ModernText
+                            Properties:
+                              AccessibleLabel: ="Email"
+                              AlignInContainer: =AlignInContainer.Stretch
+                              Color: =RGBA(45, 63, 78, 1)
+                              Font: =Font.'Segoe UI'
+                              FontWeight: =FontWeight.Semibold
+                              Height: =18
+                              PaddingBottom: =0
+                              PaddingLeft: =0
+                              PaddingRight: =0
+                              PaddingTop: =0
+                              Size: =12
+                              Text: ="Email"
+                              Wrap: =false
+                        - inpContEmail:
+                            Control: ModernTextInput
+                            Properties:
+                              AccessibleLabel: ="Email address"
+                              AlignInContainer: =AlignInContainer.Stretch
+                              Appearance: =Appearance.Outline
+                              BorderColor: =RGBA(211, 201, 185, 1)
+                              Color: =RGBA(8, 19, 28, 1)
+                              Fill: =RGBA(255, 255, 255, 1)
+                              Font: =Font.'Segoe UI'
+                              Height: =48
+                              MaxLength: =100
+                              Placeholder: ="name@company.com"
+                              RadiusBottomLeft: =12
+                              RadiusBottomRight: =12
+                              RadiusTopLeft: =12
+                              RadiusTopRight: =12
+                              Size: =15
+                  - conContFldCity:
+                      Control: GroupContainer
+                      Variant: AutoLayout
+                      Properties:
+                        DropShadow: =DropShadow.None
+                        Fill: =RGBA(252, 246, 233, 1)
+                        FillPortions: =0
+                        Height: =72
+                        LayoutAlignItems: =LayoutAlignItems.Stretch
+                        LayoutDirection: =LayoutDirection.Vertical
+                        LayoutGap: =6
+                        LayoutMinHeight: =0
+                        LayoutMinWidth: =0
+                      Children:
+                        - txtContCityLabel:
+                            Control: ModernText
+                            Properties:
+                              AccessibleLabel: ="City"
+                              AlignInContainer: =AlignInContainer.Stretch
+                              Color: =RGBA(45, 63, 78, 1)
+                              Font: =Font.'Segoe UI'
+                              FontWeight: =FontWeight.Semibold
+                              Height: =18
+                              PaddingBottom: =0
+                              PaddingLeft: =0
+                              PaddingRight: =0
+                              PaddingTop: =0
+                              Size: =12
+                              Text: ="City"
+                              Wrap: =false
+                        - inpContCity:
+                            Control: ModernTextInput
+                            Properties:
+                              AccessibleLabel: ="City"
+                              AlignInContainer: =AlignInContainer.Stretch
+                              Appearance: =Appearance.Outline
+                              BorderColor: =RGBA(211, 201, 185, 1)
+                              Color: =RGBA(8, 19, 28, 1)
+                              Fill: =RGBA(255, 255, 255, 1)
+                              Font: =Font.'Segoe UI'
+                              Height: =48
+                              MaxLength: =100
+                              Placeholder: ="City"
+                              RadiusBottomLeft: =12
+                              RadiusBottomRight: =12
+                              RadiusTopLeft: =12
+                              RadiusTopRight: =12
+                              Size: =15
+                  - conContFldNotes:
+                      Control: GroupContainer
+                      Variant: AutoLayout
+                      Properties:
+                        DropShadow: =DropShadow.None
+                        Fill: =RGBA(252, 246, 233, 1)
+                        FillPortions: =0
+                        Height: =120
+                        LayoutAlignItems: =LayoutAlignItems.Stretch
+                        LayoutDirection: =LayoutDirection.Vertical
+                        LayoutGap: =6
+                        LayoutMinHeight: =0
+                        LayoutMinWidth: =0
+                      Children:
+                        - txtContNotesLabel:
+                            Control: ModernText
+                            Properties:
+                              AccessibleLabel: ="Notes"
+                              AlignInContainer: =AlignInContainer.Stretch
+                              Color: =RGBA(45, 63, 78, 1)
+                              Font: =Font.'Segoe UI'
+                              FontWeight: =FontWeight.Semibold
+                              Height: =18
+                              PaddingBottom: =0
+                              PaddingLeft: =0
+                              PaddingRight: =0
+                              PaddingTop: =0
+                              Size: =12
+                              Text: ="Notes"
+                              Wrap: =false
+                        - inpContNotes:
+                            Control: ModernTextInput
+                            Properties:
+                              AccessibleLabel: ="Notes about this contact"
+                              AlignInContainer: =AlignInContainer.Stretch
+                              Appearance: =Appearance.Outline
+                              BorderColor: =RGBA(211, 201, 185, 1)
+                              Color: =RGBA(8, 19, 28, 1)
+                              Fill: =RGBA(255, 255, 255, 1)
+                              Font: =Font.'Segoe UI'
+                              Height: =96
+                              MaxLength: =2000
+                              Placeholder: ="What should you remember?"
+                              RadiusBottomLeft: =12
+                              RadiusBottomRight: =12
+                              RadiusTopLeft: =12
+                              RadiusTopRight: =12
+                              Size: =15
+                              Type: =TextInputType.Multiline
+            - conContFooter:
+                Control: GroupContainer
+                Variant: AutoLayout
+                Properties:
+                  BorderColor: =RGBA(211, 201, 185, 1)
+                  BorderThickness: =1
+                  Fill: =RGBA(255, 255, 255, 1)
+                  FillPortions: =0
+                  Height: =76
+                  LayoutAlignItems: =LayoutAlignItems.Stretch
+                  LayoutDirection: =LayoutDirection.Vertical
+                  LayoutMinHeight: =76
+                  LayoutMinWidth: =0
+                  PaddingBottom: =12
+                  PaddingLeft: =16
+                  PaddingRight: =16
+                  PaddingTop: =12
+                Children:
+                  - btnContSave:
+                      Control: ModernButton
+                      Properties:
+                        AccessibleLabel: ="Save contact"
+                        AlignInContainer: =AlignInContainer.Stretch
+                        BasePaletteColor: =RGBA(0, 72, 126, 1)
+                        Color: =RGBA(252, 248, 240, 1)
+                        DisplayMode: |-
+                          =If(
+                              Len(Trim(inpContName.Text)) > 0
+                                && !IsBlank(varContCompany)
+                                && !IsBlank(ddContRelationship.Selected.Label),
+                              DisplayMode.Edit,
+                              DisplayMode.Disabled
+                          )
+                        Font: =Font.'Segoe UI'
+                        FontWeight: =FontWeight.Semibold
+                        Height: =52
+                        Layout: =ButtonLayout.TextOnly
+                        LayoutMinWidth: =160
+                        OnSelect: |-
+                          =Set(
+                              varContNewRec,
+                              Patch('Networking Contacts', Defaults('Networking Contacts'),
+                                  { cws_contactname:  Trim(inpContName.Text),
+                                    cws_Company:      varContCompany,
+                                    cws_BusinessGroup: varContGroup,
+                                    cws_relationship: ddContRelationship.Selected.Val,
+                                    cws_role:         Trim(inpContRole.Text),
+                                    cws_email:        Trim(inpContEmail.Text),
+                                    cws_city:         Trim(inpContCity.Text),
+                                    cws_notes:        inpContNotes.Text }
+                              )
+                          );
+                          Set(varSavedContactId, Text(varContNewRec.cws_networkingcontactid));
+                          Set(varSavedContactName, varContNewRec.cws_contactname);
+                          If(
+                              varReturnTo = "Interaction",
+                              Set(varPrefillContactId, varSavedContactId);
+                              Set(varReturnTo, "");
+                              Navigate(ScrInteraction, ScreenTransition.UnCoverRight),
+                              Set(varSavedKind, "Contact");
+                              Set(varSavedTitle, varContNewRec.cws_contactname);
+                              Set(varPrefillContactId, "");
+                              Navigate(ScrSaved, ScreenTransition.Fade)
+                          )
+                        RadiusBottomLeft: =12
+                        RadiusBottomRight: =12
+                        RadiusTopLeft: =12
+                        RadiusTopRight: =12
+                        Size: =16
+                        Text: ="Save contact"
+                        Width: =Parent.Width

@@ -1,0 +1,176 @@
+{
+  "name": "Agent — CreateCalendarEvent",
+  "description": "Schedules a real event in the user's Outlook calendar — an interview, coffee chat, call or prep block. Times are given in plain local terms and the flow handles the time zone. Always confirm the details with the user before calling this, because the event appears in their calendar immediately and invites any attendee you name.",
+  "definition": {
+    "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+      "$authentication": {
+        "defaultValue": {},
+        "type": "SecureObject"
+      },
+      "$connections": {
+        "defaultValue": {},
+        "type": "Object"
+      }
+    },
+    "triggers": {
+      "When_an_agent_calls_the_flow": {
+        "type": "Request",
+        "kind": "Skills",
+        "inputs": {
+          "schema": {
+            "type": "object",
+            "properties": {
+              "subject": {
+                "type": "string",
+                "title": "subject",
+                "description": "Event title, e.g. Coffee chat with Marcus Lee"
+              },
+              "date": {
+                "type": "string",
+                "title": "date",
+                "description": "Local calendar date as YYYY-MM-DD"
+              },
+              "startTime": {
+                "type": "string",
+                "title": "startTime",
+                "description": "Local start time in 24-hour HH:mm, e.g. 14:30"
+              },
+              "durationMinutes": {
+                "type": "integer",
+                "title": "durationMinutes",
+                "description": "Length in minutes. Pass the word none for the default of 30 — never ask the user for this."
+              },
+              "attendeeEmail": {
+                "type": "string",
+                "title": "attendeeEmail",
+                "description": "Email address to invite, from GetRecordSummary. Pass the word none for a solo block — never ask the user for this."
+              },
+              "location": {
+                "type": "string",
+                "title": "location",
+                "description": "Where it happens, or a meeting link. Pass the word none when unknown — never ask the user for this."
+              },
+              "body": {
+                "type": "string",
+                "title": "body",
+                "description": "Notes or agenda for the invite. Pass the word none when there are none — never ask the user for this."
+              }
+            },
+            "required": [
+              "subject",
+              "date",
+              "startTime",
+              "durationMinutes",
+              "attendeeEmail",
+              "location",
+              "body"
+            ]
+          }
+        }
+      }
+    },
+    "actions": {
+      "Window": {
+        "type": "Compose",
+        "inputs": {
+          "minutes": "@if(or(empty(coalesce(triggerBody()?['durationMinutes'],'')),equals(toLower(trim(string(triggerBody()?['durationMinutes']))),'none')),30,int(triggerBody()?['durationMinutes']))",
+          "startLocal": "@concat(triggerBody()?['date'],'T',triggerBody()?['startTime'],':00')",
+          "attendee": "@if(or(empty(coalesce(triggerBody()?['attendeeEmail'],'')),equals(toLower(trim(string(triggerBody()?['attendeeEmail']))),'none')),'',triggerBody()?['attendeeEmail'])",
+          "location": "@if(or(empty(coalesce(triggerBody()?['location'],'')),equals(toLower(trim(string(triggerBody()?['location']))),'none')),'',triggerBody()?['location'])",
+          "body": "@if(or(empty(coalesce(triggerBody()?['body'],'')),equals(toLower(trim(string(triggerBody()?['body']))),'none')),'',triggerBody()?['body'])"
+        },
+        "runAfter": {}
+      },
+      "End_time": {
+        "type": "Compose",
+        "inputs": "@addMinutes(outputs('Window')['startLocal'], outputs('Window')['minutes'], 'yyyy-MM-ddTHH:mm:ss')",
+        "runAfter": {
+          "Window": [
+            "Succeeded"
+          ]
+        }
+      },
+      "Create_event": {
+        "type": "OpenApiConnection",
+        "inputs": {
+          "host": {
+            "connectionName": "shared_office365",
+            "operationId": "V4CalendarPostItem",
+            "apiId": "/providers/Microsoft.PowerApps/apis/shared_office365"
+          },
+          "parameters": {
+            "table": "Calendar",
+            "item/subject": "@triggerBody()?['subject']",
+            "item/start": "@outputs('Window')['startLocal']",
+            "item/end": "@outputs('End_time')",
+            "item/timeZone": "(UTC-08:00) Pacific Time (US & Canada)",
+            "item/requiredAttendees": "@outputs('Window')['attendee']",
+            "item/location": "@outputs('Window')['location']",
+            "item/body": "@outputs('Window')['body']",
+            "item/isReminderOn": true,
+            "item/reminderMinutesBeforeStart": 15
+          }
+        },
+        "runAfter": {
+          "End_time": [
+            "Succeeded"
+          ]
+        }
+      },
+      "Respond_to_the_agent": {
+        "type": "Response",
+        "kind": "Skills",
+        "inputs": {
+          "statusCode": 200,
+          "body": {
+            "eventId": "@coalesce(body('Create_event')?['id'],'')",
+            "subject": "@triggerBody()?['subject']",
+            "date": "@triggerBody()?['date']",
+            "startTime": "@triggerBody()?['startTime']",
+            "durationMinutes": "@outputs('Window')['minutes']",
+            "attendee": "@outputs('Window')['attendee']",
+            "created": true,
+            "message": "Event created in Outlook. Keep the eventId if the user may want to reschedule or cancel it."
+          },
+          "schema": {
+            "type": "object",
+            "properties": {
+              "eventId": {
+                "type": "string",
+                "description": "Pass this to UpdateCalendarEvent to reschedule or cancel"
+              },
+              "subject": {
+                "type": "string"
+              },
+              "date": {
+                "type": "string"
+              },
+              "startTime": {
+                "type": "string"
+              },
+              "durationMinutes": {
+                "type": "integer"
+              },
+              "attendee": {
+                "type": "string"
+              },
+              "created": {
+                "type": "boolean"
+              },
+              "message": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        "runAfter": {
+          "Create_event": [
+            "Succeeded"
+          ]
+        }
+      }
+    }
+  }
+}

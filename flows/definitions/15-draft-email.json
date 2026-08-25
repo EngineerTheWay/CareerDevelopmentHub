@@ -1,0 +1,130 @@
+{
+  "name": "Agent — DraftEmail",
+  "description": "Creates a real draft email in Outlook with the body you approved. The draft is NOT sent — it lands in the Drafts folder for the user to review and send themselves. Always show the user the draft text and get their approval before calling this. Ground the content in GetRecordSummary first so names, roles and history are real.",
+  "definition": {
+    "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+      "$authentication": {
+        "defaultValue": {},
+        "type": "SecureObject"
+      },
+      "$connections": {
+        "defaultValue": {},
+        "type": "Object"
+      }
+    },
+    "triggers": {
+      "When_an_agent_calls_the_flow": {
+        "type": "Request",
+        "kind": "Skills",
+        "inputs": {
+          "schema": {
+            "type": "object",
+            "properties": {
+              "to": {
+                "type": "string",
+                "title": "to",
+                "description": "Recipient email address. Use the address returned by GetRecordSummary — never guess one."
+              },
+              "subject": {
+                "type": "string",
+                "title": "subject",
+                "description": "Subject line"
+              },
+              "body": {
+                "type": "string",
+                "title": "body",
+                "description": "The full message body, exactly as approved by the user. Plain text or simple HTML."
+              },
+              "cc": {
+                "type": "string",
+                "title": "cc",
+                "description": "Optional CC address. Pass the word none when there is no CC — never ask the user for this."
+              }
+            },
+            "required": [
+              "to",
+              "subject",
+              "body",
+              "cc"
+            ]
+          }
+        }
+      }
+    },
+    "actions": {
+      "Compose_draft": {
+        "type": "Compose",
+        "inputs": {
+          "cc": "@if(or(empty(coalesce(triggerBody()?['cc'],'')),equals(toLower(string(triggerBody()?['cc'])),'none')),'',triggerBody()?['cc'])",
+          "bodyHtml": "@replace(replace(triggerBody()?['body'], decodeUriComponent('%0D%0A'), '<br>'), decodeUriComponent('%0A'), '<br>')"
+        },
+        "runAfter": {}
+      },
+      "Create_draft": {
+        "type": "OpenApiConnection",
+        "inputs": {
+          "host": {
+            "connectionName": "shared_office365",
+            "operationId": "DraftEmail",
+            "apiId": "/providers/Microsoft.PowerApps/apis/shared_office365"
+          },
+          "parameters": {
+            "draftMessage/To": "@triggerBody()?['to']",
+            "draftMessage/Subject": "@triggerBody()?['subject']",
+            "draftMessage/Body": "@outputs('Compose_draft')['bodyHtml']",
+            "draftMessage/Cc": "@outputs('Compose_draft')['cc']",
+            "draftMessage/Importance": "Normal"
+          }
+        },
+        "runAfter": {
+          "Compose_draft": [
+            "Succeeded"
+          ]
+        }
+      },
+      "Respond_to_the_agent": {
+        "type": "Response",
+        "kind": "Skills",
+        "inputs": {
+          "statusCode": 200,
+          "body": {
+            "draftId": "@coalesce(body('Create_draft')?['id'],'')",
+            "to": "@triggerBody()?['to']",
+            "subject": "@triggerBody()?['subject']",
+            "created": true,
+            "message": "Draft created in Outlook. It has NOT been sent — open it from your Drafts folder to review and send."
+          },
+          "schema": {
+            "type": "object",
+            "properties": {
+              "draftId": {
+                "type": "string",
+                "description": "Outlook message id of the draft"
+              },
+              "to": {
+                "type": "string"
+              },
+              "subject": {
+                "type": "string"
+              },
+              "created": {
+                "type": "boolean"
+              },
+              "message": {
+                "type": "string",
+                "description": "Relay this to the user so they know it was not sent"
+              }
+            }
+          }
+        },
+        "runAfter": {
+          "Create_draft": [
+            "Succeeded"
+          ]
+        }
+      }
+    }
+  }
+}

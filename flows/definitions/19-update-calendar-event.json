@@ -1,0 +1,203 @@
+{
+  "name": "Agent — UpdateCalendarEvent",
+  "description": "Reschedules or cancels an existing Outlook calendar event. Pass action as reschedule with a new date and time, or as cancel to delete it. Cancelling is irreversible and notifies any attendee, so confirm with the user first. The eventId comes from CreateCalendarEvent or from the todaysEvents list on GetDashboard.",
+  "definition": {
+    "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+      "$authentication": {
+        "defaultValue": {},
+        "type": "SecureObject"
+      },
+      "$connections": {
+        "defaultValue": {},
+        "type": "Object"
+      }
+    },
+    "triggers": {
+      "When_an_agent_calls_the_flow": {
+        "type": "Request",
+        "kind": "Skills",
+        "inputs": {
+          "schema": {
+            "type": "object",
+            "properties": {
+              "eventId": {
+                "type": "string",
+                "title": "eventId",
+                "description": "Outlook event id"
+              },
+              "action": {
+                "type": "string",
+                "title": "action",
+                "description": "Either reschedule or cancel"
+              },
+              "date": {
+                "type": "string",
+                "title": "date",
+                "description": "New local date YYYY-MM-DD when rescheduling. Pass the word none when cancelling — never ask the user for this."
+              },
+              "startTime": {
+                "type": "string",
+                "title": "startTime",
+                "description": "New local start time in 24-hour HH:mm when rescheduling. Pass the word none when cancelling — never ask the user for this."
+              },
+              "durationMinutes": {
+                "type": "integer",
+                "title": "durationMinutes",
+                "description": "Length in minutes when rescheduling. Pass the word none to keep 30 — never ask the user for this."
+              }
+            },
+            "required": [
+              "eventId",
+              "action",
+              "date",
+              "startTime",
+              "durationMinutes"
+            ]
+          }
+        }
+      }
+    },
+    "actions": {
+      "Plan": {
+        "type": "Compose",
+        "inputs": {
+          "isCancel": "@equals(toLower(trim(coalesce(triggerBody()?['action'],''))),'cancel')",
+          "minutes": "@if(or(empty(coalesce(triggerBody()?['durationMinutes'],'')),equals(toLower(trim(string(triggerBody()?['durationMinutes']))),'none')),30,int(triggerBody()?['durationMinutes']))",
+          "startLocal": "@if(or(empty(coalesce(triggerBody()?['date'],'')),equals(toLower(trim(string(triggerBody()?['date']))),'none')),'',concat(triggerBody()?['date'],'T',triggerBody()?['startTime'],':00'))"
+        },
+        "runAfter": {}
+      },
+      "Branch": {
+        "type": "Switch",
+        "expression": "@if(outputs('Plan')['isCancel'],'cancel','reschedule')",
+        "cases": {
+          "Cancel": {
+            "case": "cancel",
+            "actions": {
+              "Delete_event": {
+                "type": "OpenApiConnection",
+                "inputs": {
+                  "host": {
+                    "connectionName": "shared_office365",
+                    "operationId": "CalendarDeleteItem_V2",
+                    "apiId": "/providers/Microsoft.PowerApps/apis/shared_office365"
+                  },
+                  "parameters": {
+                    "calendar": "Calendar",
+                    "event": "@triggerBody()?['eventId']"
+                  }
+                },
+                "runAfter": {}
+              }
+            }
+          },
+          "Reschedule": {
+            "case": "reschedule",
+            "actions": {
+              "End_time": {
+                "type": "Compose",
+                "inputs": "@addMinutes(outputs('Plan')['startLocal'], outputs('Plan')['minutes'], 'yyyy-MM-ddTHH:mm:ss')",
+                "runAfter": {
+                  "Get_event": [
+                    "Succeeded"
+                  ]
+                }
+              },
+              "Patch_event": {
+                "type": "OpenApiConnection",
+                "inputs": {
+                  "host": {
+                    "connectionName": "shared_office365",
+                    "operationId": "V4CalendarPatchItem",
+                    "apiId": "/providers/Microsoft.PowerApps/apis/shared_office365"
+                  },
+                  "parameters": {
+                    "table": "Calendar",
+                    "id": "@triggerBody()?['eventId']",
+                    "item/start": "@outputs('Plan')['startLocal']",
+                    "item/end": "@outputs('End_time')",
+                    "item/timeZone": "(UTC-08:00) Pacific Time (US & Canada)",
+                    "item/subject": "@coalesce(body('Get_event')?['subject'],'Untitled event')"
+                  }
+                },
+                "runAfter": {
+                  "End_time": [
+                    "Succeeded"
+                  ]
+                }
+              },
+              "Get_event": {
+                "type": "OpenApiConnection",
+                "inputs": {
+                  "host": {
+                    "connectionName": "shared_office365",
+                    "operationId": "V3CalendarGetItem",
+                    "apiId": "/providers/Microsoft.PowerApps/apis/shared_office365"
+                  },
+                  "parameters": {
+                    "table": "Calendar",
+                    "id": "@triggerBody()?['eventId']"
+                  }
+                },
+                "runAfter": {}
+              }
+            }
+          }
+        },
+        "default": {
+          "actions": {}
+        },
+        "runAfter": {
+          "Plan": [
+            "Succeeded"
+          ]
+        }
+      },
+      "Respond_to_the_agent": {
+        "type": "Response",
+        "kind": "Skills",
+        "inputs": {
+          "statusCode": 200,
+          "body": {
+            "eventId": "@triggerBody()?['eventId']",
+            "action": "@if(outputs('Plan')['isCancel'],'cancel','reschedule')",
+            "newDate": "@if(outputs('Plan')['isCancel'],'',triggerBody()?['date'])",
+            "newStartTime": "@if(outputs('Plan')['isCancel'],'',triggerBody()?['startTime'])",
+            "done": true,
+            "message": "@if(outputs('Plan')['isCancel'],'Event cancelled and removed from the calendar.','Event rescheduled.')"
+          },
+          "schema": {
+            "type": "object",
+            "properties": {
+              "eventId": {
+                "type": "string"
+              },
+              "action": {
+                "type": "string"
+              },
+              "newDate": {
+                "type": "string"
+              },
+              "newStartTime": {
+                "type": "string"
+              },
+              "done": {
+                "type": "boolean"
+              },
+              "message": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        "runAfter": {
+          "Branch": [
+            "Succeeded"
+          ]
+        }
+      }
+    }
+  }
+}

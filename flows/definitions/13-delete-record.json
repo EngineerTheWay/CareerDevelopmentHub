@@ -1,0 +1,115 @@
+{
+  "name": "Agent — DeleteRecord",
+  "description": "Deletes a Contact, Job Application, Follow-Up or Interaction. Deliberately hard to call by accident: confirmName must exactly match the record's own name, so the record has to be fetched and shown to the user before it can be deleted. Never call this without explicit user confirmation.",
+  "definition": {
+    "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+      "$authentication": { "defaultValue": {}, "type": "SecureObject" },
+      "$connections": { "defaultValue": {}, "type": "Object" }
+    },
+    "triggers": {
+      "When_an_agent_calls_the_flow": {
+        "type": "Request",
+        "kind": "Skills",
+        "inputs": {
+          "schema": {
+            "type": "object",
+            "properties": {
+              "table": { "type": "string", "title": "table", "description": "One of: contact, application, followUp, interaction" },
+              "recordId": { "type": "string", "title": "recordId" },
+              "confirmName": {
+                "type": "string",
+                "title": "confirmName",
+                "description": "The record's exact current name — contact name, application role, follow-up title, or interaction name. The delete is refused if it does not match."
+              }
+            },
+            "required": ["table", "recordId", "confirmName"]
+          }
+        }
+      }
+    },
+    "actions": {
+      "Meta": {
+        "type": "Compose",
+        "inputs": {
+          "tableSet": "@if(equals(triggerBody()?['table'],'contact'),'cws_networkingcontacts',if(equals(triggerBody()?['table'],'application'),'cws_jobapplications',if(equals(triggerBody()?['table'],'followUp'),'cws_followups','cws_interactions')))",
+          "nameField": "@if(equals(triggerBody()?['table'],'contact'),'cws_contactname',if(equals(triggerBody()?['table'],'application'),'cws_role',if(equals(triggerBody()?['table'],'followUp'),'cws_title','cws_interactionname')))"
+        },
+        "runAfter": {}
+      },
+      "Get_record": {
+        "type": "OpenApiConnection",
+        "inputs": {
+          "host": {
+            "connectionName": "shared_commondataserviceforapps",
+            "operationId": "GetItem",
+            "apiId": "/providers/Microsoft.PowerApps/apis/shared_commondataserviceforapps"
+          },
+          "parameters": {
+            "entityName": "@outputs('Meta')['tableSet']",
+            "recordId": "@triggerBody()?['recordId']",
+            "$select": "@outputs('Meta')['nameField']"
+          }
+        },
+        "runAfter": { "Meta": ["Succeeded"] }
+      },
+      "Guard": {
+        "type": "Compose",
+        "inputs": {
+          "actualName": "@coalesce(body('Get_record')?[outputs('Meta')['nameField']],'')",
+          "matches": "@equals(toLower(trim(coalesce(body('Get_record')?[outputs('Meta')['nameField']],''))), toLower(trim(coalesce(triggerBody()?['confirmName'],''))))"
+        },
+        "runAfter": { "Get_record": ["Succeeded"] }
+      },
+      "Apply_delete": {
+        "type": "If",
+        "expression": { "and": [{ "equals": ["@outputs('Guard')['matches']", true] }] },
+        "actions": {
+          "Delete": {
+            "type": "OpenApiConnection",
+            "inputs": {
+              "host": {
+                "connectionName": "shared_commondataserviceforapps",
+                "operationId": "DeleteRecord",
+                "apiId": "/providers/Microsoft.PowerApps/apis/shared_commondataserviceforapps"
+              },
+              "parameters": {
+                "entityName": "@outputs('Meta')['tableSet']",
+                "recordId": "@triggerBody()?['recordId']"
+              }
+            },
+            "runAfter": {}
+          }
+        },
+        "else": { "actions": {} },
+        "runAfter": { "Guard": ["Succeeded"] }
+      },
+      "Respond_to_the_agent": {
+        "type": "Response",
+        "kind": "Skills",
+        "inputs": {
+          "statusCode": 200,
+          "body": {
+            "recordId": "@triggerBody()?['recordId']",
+            "table": "@triggerBody()?['table']",
+            "deleted": "@outputs('Guard')['matches']",
+            "recordName": "@outputs('Guard')['actualName']",
+            "message": "@if(outputs('Guard')['matches'], concat('Deleted \"', outputs('Guard')['actualName'], '\".'), concat('Refused: confirmName did not match. The record is named \"', outputs('Guard')['actualName'], '\". Show this to the user and confirm before retrying.'))"
+          },
+          "schema": {
+            "type": "object",
+            "properties": {
+              "recordId": { "type": "string" },
+              "table": { "type": "string" },
+              "deleted": { "type": "boolean", "description": "False when confirmName did not match" },
+              "recordName": { "type": "string" },
+              "message": { "type": "string" }
+            }
+          }
+        },
+        "runAfter": { "Apply_delete": ["Succeeded"] }
+      }
+    }
+  }
+}

@@ -1,0 +1,159 @@
+{
+  "name": "Agent — SendDraft",
+  "description": "Sends an email draft that DraftEmail already created. This is the only irreversible action available — a sent email cannot be recalled. It refuses unless confirmSubject exactly matches the draft's real subject, so the message must be fetched and shown to the user before it can go out. Never call this without the user explicitly saying to send.",
+  "definition": {
+    "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+      "$authentication": {
+        "defaultValue": {},
+        "type": "SecureObject"
+      },
+      "$connections": {
+        "defaultValue": {},
+        "type": "Object"
+      }
+    },
+    "triggers": {
+      "When_an_agent_calls_the_flow": {
+        "type": "Request",
+        "kind": "Skills",
+        "inputs": {
+          "schema": {
+            "type": "object",
+            "properties": {
+              "draftId": {
+                "type": "string",
+                "title": "draftId",
+                "description": "The draftId returned by DraftEmail."
+              },
+              "confirmSubject": {
+                "type": "string",
+                "title": "confirmSubject",
+                "description": "The draft's exact current subject line. The send is refused if it does not match, so read the draft first and show it to the user."
+              }
+            },
+            "required": [
+              "draftId",
+              "confirmSubject"
+            ]
+          }
+        }
+      }
+    },
+    "actions": {
+      "Get_draft": {
+        "type": "OpenApiConnection",
+        "inputs": {
+          "host": {
+            "connectionName": "shared_office365",
+            "operationId": "GetEmailV2",
+            "apiId": "/providers/Microsoft.PowerApps/apis/shared_office365"
+          },
+          "parameters": {
+            "messageId": "@triggerBody()?['draftId']",
+            "includeAttachments": false
+          }
+        },
+        "runAfter": {}
+      },
+      "Guard": {
+        "type": "Compose",
+        "inputs": {
+          "found": "@equals(actions('Get_draft')['status'],'Succeeded')",
+          "actualSubject": "@coalesce(body('Get_draft')?['subject'],'')",
+          "recipients": "@coalesce(body('Get_draft')?['to'],'')",
+          "matches": "@and(equals(actions('Get_draft')['status'],'Succeeded'), equals(toLower(trim(coalesce(body('Get_draft')?['subject'],''))), toLower(trim(coalesce(triggerBody()?['confirmSubject'],'')))))"
+        },
+        "runAfter": {
+          "Get_draft": [
+            "Succeeded",
+            "Failed"
+          ]
+        }
+      },
+      "Send_if_confirmed": {
+        "type": "If",
+        "expression": {
+          "and": [
+            {
+              "equals": [
+                "@outputs('Guard')['matches']",
+                true
+              ]
+            }
+          ]
+        },
+        "actions": {
+          "Send": {
+            "type": "OpenApiConnection",
+            "inputs": {
+              "host": {
+                "connectionName": "shared_office365",
+                "operationId": "SendDraftEmail",
+                "apiId": "/providers/Microsoft.PowerApps/apis/shared_office365"
+              },
+              "parameters": {
+                "messageId": "@triggerBody()?['draftId']"
+              }
+            },
+            "runAfter": {}
+          }
+        },
+        "else": {
+          "actions": {}
+        },
+        "runAfter": {
+          "Guard": [
+            "Succeeded"
+          ]
+        }
+      },
+      "Respond_to_the_agent": {
+        "type": "Response",
+        "kind": "Skills",
+        "inputs": {
+          "statusCode": 200,
+          "body": {
+            "draftId": "@triggerBody()?['draftId']",
+            "sent": "@outputs('Guard')['matches']",
+            "subject": "@outputs('Guard')['actualSubject']",
+            "recipients": "@outputs('Guard')['recipients']",
+            "message": "@if(not(outputs('Guard')['found']),'Refused: no draft was found with that id. It may have been sent or deleted already — create a new draft with DraftEmail.',if(outputs('Guard')['matches'], concat('Sent to ', outputs('Guard')['recipients'], '.'), concat('Refused: confirmSubject did not match. The draft subject is \"', outputs('Guard')['actualSubject'], '\". Show the draft to the user and get explicit approval before retrying.')))",
+            "found": "@outputs('Guard')['found']"
+          },
+          "schema": {
+            "type": "object",
+            "properties": {
+              "draftId": {
+                "type": "string"
+              },
+              "sent": {
+                "type": "boolean",
+                "description": "False when the send was refused"
+              },
+              "subject": {
+                "type": "string"
+              },
+              "recipients": {
+                "type": "string"
+              },
+              "message": {
+                "type": "string"
+              },
+              "found": {
+                "type": "boolean",
+                "description": "False when the draftId no longer exists"
+              }
+            }
+          }
+        },
+        "runAfter": {
+          "Send_if_confirmed": [
+            "Succeeded"
+          ]
+        }
+      }
+    }
+  }
+}

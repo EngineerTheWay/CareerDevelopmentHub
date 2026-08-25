@@ -1,0 +1,233 @@
+{
+  "name": "Agent — CreateInteraction",
+  "description": "Logs an Interaction (networking chat, call, meeting, interview, email or event) against a Contact, and optionally a Job Application. A Contact is required by the data model. Generates the Interaction's display name server-side in the same format the app uses, because the form script that normally builds it does not run for API writes.",
+  "definition": {
+    "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+      "$authentication": {
+        "defaultValue": {},
+        "type": "SecureObject"
+      },
+      "$connections": {
+        "defaultValue": {},
+        "type": "Object"
+      }
+    },
+    "triggers": {
+      "When_an_agent_calls_the_flow": {
+        "type": "Request",
+        "kind": "Skills",
+        "inputs": {
+          "schema": {
+            "type": "object",
+            "properties": {
+              "interactionType": {
+                "type": "integer",
+                "title": "interactionType",
+                "description": "771670000 Networking Chat, 771670001 LinkedIn, 771670002 Email, 771670003 Call, 771670004 Meeting, 771670005 Event, 771670006 Interview, 771670009 Other"
+              },
+              "interactionDate": {
+                "type": "string",
+                "title": "interactionDate",
+                "description": "Local calendar date as YYYY-MM-DD. Defaults to today when omitted. Pass the word none when it does not apply — never ask the user for this."
+              },
+              "contactId": {
+                "type": "string",
+                "title": "contactId",
+                "description": "Networking Contact GUID from ResolveRecord. Required — every Interaction must have a Contact."
+              },
+              "applicationId": {
+                "type": "string",
+                "title": "applicationId",
+                "description": "Job Application GUID from ResolveRecord, when the interaction is about a specific application. Pass the word none when it does not apply — never ask the user for this."
+              },
+              "notes": {
+                "type": "string",
+                "title": "notes",
+                "description": "What was discussed Pass the word none when it does not apply — never ask the user for this."
+              }
+            },
+            "required": [
+              "interactionType",
+              "contactId",
+              "applicationId",
+              "interactionDate",
+              "notes"
+            ]
+          }
+        }
+      }
+    },
+    "actions": {
+      "Meta": {
+        "type": "Compose",
+        "inputs": {
+          "typeLabel": "@if(equals(string(triggerBody()?['interactionType']),'771670000'),'Networking Chat',if(equals(string(triggerBody()?['interactionType']),'771670001'),'LinkedIn',if(equals(string(triggerBody()?['interactionType']),'771670002'),'Email',if(equals(string(triggerBody()?['interactionType']),'771670003'),'Call',if(equals(string(triggerBody()?['interactionType']),'771670004'),'Meeting',if(equals(string(triggerBody()?['interactionType']),'771670005'),'Event',if(equals(string(triggerBody()?['interactionType']),'771670006'),'Interview','Other')))))))",
+          "dateLocal": "@if(or(empty(coalesce(triggerBody()?['interactionDate'],'')),equals(toLower(trim(string(triggerBody()?['interactionDate']))),'none')), convertFromUtc(utcNow(),'Pacific Standard Time','yyyy-MM-dd'), triggerBody()?['interactionDate'])"
+        },
+        "runAfter": {}
+      },
+      "Create_interaction": {
+        "type": "OpenApiConnection",
+        "inputs": {
+          "host": {
+            "connectionName": "shared_commondataserviceforapps",
+            "operationId": "CreateRecord",
+            "apiId": "/providers/Microsoft.PowerApps/apis/shared_commondataserviceforapps"
+          },
+          "parameters": {
+            "entityName": "cws_interactions",
+            "item/cws_interactiontype": "@int(triggerBody()?['interactionType'])",
+            "item/cws_interactiondate": "@convertToUtc(concat(outputs('Meta')['dateLocal'],'T00:00:00'),'Pacific Standard Time')",
+            "item/cws_notes": "@if(equals(toLower(trim(coalesce(triggerBody()?['notes'],''))),'none'),'',coalesce(triggerBody()?['notes'],''))",
+            "item/cws_interactionname": "@outputs('Meta')['typeLabel']",
+            "item/cws_Contact@odata.bind": "@concat('/cws_networkingcontacts(', triggerBody()?['contactId'], ')')"
+          }
+        },
+        "runAfter": {
+          "Meta": [
+            "Succeeded"
+          ]
+        }
+      },
+      "Bind_application": {
+        "type": "If",
+        "expression": {
+          "and": [
+            {
+              "equals": [
+                "@if(or(empty(coalesce(triggerBody()?['applicationId'],'')),equals(toLower(string(triggerBody()?['applicationId'])),'none')),'skip','bind')",
+                "bind"
+              ]
+            }
+          ]
+        },
+        "actions": {
+          "Set_application": {
+            "type": "OpenApiConnection",
+            "inputs": {
+              "host": {
+                "connectionName": "shared_commondataserviceforapps",
+                "operationId": "UpdateRecord",
+                "apiId": "/providers/Microsoft.PowerApps/apis/shared_commondataserviceforapps"
+              },
+              "parameters": {
+                "entityName": "cws_interactions",
+                "recordId": "@body('Create_interaction')?['cws_interactionid']",
+                "item/cws_RelatedApplication@odata.bind": "@concat('/cws_jobapplications(', triggerBody()?['applicationId'], ')')"
+              }
+            },
+            "runAfter": {}
+          }
+        },
+        "else": {
+          "actions": {}
+        },
+        "runAfter": {
+          "Create_interaction": [
+            "Succeeded"
+          ]
+        }
+      },
+      "Read_back": {
+        "type": "OpenApiConnection",
+        "inputs": {
+          "host": {
+            "connectionName": "shared_commondataserviceforapps",
+            "operationId": "GetItem",
+            "apiId": "/providers/Microsoft.PowerApps/apis/shared_commondataserviceforapps"
+          },
+          "parameters": {
+            "entityName": "cws_interactions",
+            "recordId": "@body('Create_interaction')?['cws_interactionid']",
+            "$select": "cws_interactionid,cws_interactionname,cws_interactiondate,cws_interactiontype,cws_notes",
+            "$expand": "cws_Contact($select=cws_contactname),cws_RelatedApplication($select=cws_role)"
+          }
+        },
+        "runAfter": {
+          "Bind_application": [
+            "Succeeded"
+          ]
+        }
+      },
+      "Compose_name": {
+        "type": "Compose",
+        "inputs": "@if(greater(length(concat(outputs('Meta')['typeLabel'], if(empty(coalesce(body('Read_back')?['cws_Contact']?['cws_contactname'],'')),'',concat(' with ',body('Read_back')?['cws_Contact']?['cws_contactname'])), ' on ', formatDateTime(convertFromUtc(body('Read_back')?['cws_interactiondate'],'Pacific Standard Time'),'MMM dd, yyyy'))),850), substring(concat(outputs('Meta')['typeLabel'], if(empty(coalesce(body('Read_back')?['cws_Contact']?['cws_contactname'],'')),'',concat(' with ',body('Read_back')?['cws_Contact']?['cws_contactname'])), ' on ', formatDateTime(convertFromUtc(body('Read_back')?['cws_interactiondate'],'Pacific Standard Time'),'MMM dd, yyyy')),0,850), concat(outputs('Meta')['typeLabel'], if(empty(coalesce(body('Read_back')?['cws_Contact']?['cws_contactname'],'')),'',concat(' with ',body('Read_back')?['cws_Contact']?['cws_contactname'])), ' on ', formatDateTime(convertFromUtc(body('Read_back')?['cws_interactiondate'],'Pacific Standard Time'),'MMM dd, yyyy')))",
+        "runAfter": {
+          "Read_back": [
+            "Succeeded"
+          ]
+        }
+      },
+      "Update_name": {
+        "type": "OpenApiConnection",
+        "inputs": {
+          "host": {
+            "connectionName": "shared_commondataserviceforapps",
+            "operationId": "UpdateRecord",
+            "apiId": "/providers/Microsoft.PowerApps/apis/shared_commondataserviceforapps"
+          },
+          "parameters": {
+            "entityName": "cws_interactions",
+            "recordId": "@body('Create_interaction')?['cws_interactionid']",
+            "item/cws_interactionname": "@outputs('Compose_name')"
+          }
+        },
+        "runAfter": {
+          "Compose_name": [
+            "Succeeded"
+          ]
+        }
+      },
+      "Respond_to_the_agent": {
+        "type": "Response",
+        "kind": "Skills",
+        "inputs": {
+          "statusCode": 200,
+          "body": {
+            "id": "@body('Create_interaction')?['cws_interactionid']",
+            "name": "@outputs('Compose_name')",
+            "date": "@convertFromUtc(body('Read_back')?['cws_interactiondate'],'Pacific Standard Time','yyyy-MM-dd')",
+            "typeLabel": "@outputs('Meta')['typeLabel']",
+            "contact": "@coalesce(body('Read_back')?['cws_Contact']?['cws_contactname'],'')",
+            "application": "@coalesce(body('Read_back')?['cws_RelatedApplication']?['cws_role'],'')",
+            "created": true
+          },
+          "schema": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "name": {
+                "type": "string",
+                "description": "Generated display name"
+              },
+              "date": {
+                "type": "string"
+              },
+              "typeLabel": {
+                "type": "string"
+              },
+              "contact": {
+                "type": "string"
+              },
+              "application": {
+                "type": "string"
+              },
+              "created": {
+                "type": "boolean"
+              }
+            }
+          }
+        },
+        "runAfter": {
+          "Update_name": [
+            "Succeeded"
+          ]
+        }
+      }
+    }
+  }
+}

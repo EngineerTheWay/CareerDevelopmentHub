@@ -1,0 +1,179 @@
+{
+  "name": "Agent — ListByCompany",
+  "description": "Lists everything recorded against one company: the networking contacts who work there, the job applications filed there, and the business groups defined for it. Use this for questions like who do I know at a company, what have I applied to there, or which teams exist there. Resolve the company with ResolveRecord first and pass its GUID.",
+  "definition": {
+    "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+      "$authentication": { "defaultValue": {}, "type": "SecureObject" },
+      "$connections": { "defaultValue": {}, "type": "Object" }
+    },
+    "triggers": {
+      "When_an_agent_calls_the_flow": {
+        "type": "Request",
+        "kind": "Skills",
+        "inputs": {
+          "schema": {
+            "type": "object",
+            "properties": {
+              "companyId": {
+                "type": "string",
+                "title": "companyId",
+                "description": "Company GUID from ResolveRecord."
+              }
+            },
+            "required": ["companyId"]
+          }
+        }
+      }
+    },
+    "actions": {
+      "Get_company": {
+        "type": "OpenApiConnection",
+        "inputs": {
+          "host": {
+            "connectionName": "shared_commondataserviceforapps",
+            "operationId": "GetItem",
+            "apiId": "/providers/Microsoft.PowerApps/apis/shared_commondataserviceforapps"
+          },
+          "parameters": {
+            "entityName": "cws_companies",
+            "recordId": "@triggerBody()?['companyId']",
+            "$select": "cws_companyid,cws_companyname"
+          }
+        },
+        "runAfter": {}
+      },
+      "Get_contacts": {
+        "type": "OpenApiConnection",
+        "inputs": {
+          "host": {
+            "connectionName": "shared_commondataserviceforapps",
+            "operationId": "ListRecords",
+            "apiId": "/providers/Microsoft.PowerApps/apis/shared_commondataserviceforapps"
+          },
+          "parameters": {
+            "entityName": "cws_networkingcontacts",
+            "$select": "cws_networkingcontactid,cws_contactname,cws_role,cws_email,cws_city,cws_relationship",
+            "$filter": "@concat('statecode eq 0 and _cws_company_value eq ', triggerBody()?['companyId'])",
+            "$expand": "cws_BusinessGroup($select=cws_businessgroupname)",
+            "$orderby": "cws_contactname asc",
+            "$top": 200
+          }
+        },
+        "runAfter": { "Get_company": ["Succeeded"] }
+      },
+      "Shape_contacts": {
+        "type": "Select",
+        "inputs": {
+          "from": "@outputs('Get_contacts')?['body/value']",
+          "select": {
+            "id": "@item()?['cws_networkingcontactid']",
+            "name": "@item()?['cws_contactname']",
+            "role": "@coalesce(item()?['cws_role'],'')",
+            "email": "@coalesce(item()?['cws_email'],'')",
+            "city": "@coalesce(item()?['cws_city'],'')",
+            "businessGroup": "@coalesce(item()?['cws_BusinessGroup']?['cws_businessgroupname'],'')",
+            "relationship": "@item()?['cws_relationship']",
+            "relationshipLabel": "@if(equals(item()?['cws_relationship'],771670000),'Warm',if(equals(item()?['cws_relationship'],771670001),'New',if(equals(item()?['cws_relationship'],771670002),'Dormant',if(equals(item()?['cws_relationship'],771670003),'Mentor',if(equals(item()?['cws_relationship'],771670004),'Recruiter','Hiring Manager')))))"
+          }
+        },
+        "runAfter": { "Get_contacts": ["Succeeded"] }
+      },
+      "Get_applications": {
+        "type": "OpenApiConnection",
+        "inputs": {
+          "host": {
+            "connectionName": "shared_commondataserviceforapps",
+            "operationId": "ListRecords",
+            "apiId": "/providers/Microsoft.PowerApps/apis/shared_commondataserviceforapps"
+          },
+          "parameters": {
+            "entityName": "cws_jobapplications",
+            "$select": "cws_jobapplicationid,cws_role,cws_stage,cws_dateapplied,cws_nextstep,modifiedon",
+            "$filter": "@concat('statecode eq 0 and _cws_company_value eq ', triggerBody()?['companyId'])",
+            "$expand": "cws_BusinessGroup($select=cws_businessgroupname)",
+            "$orderby": "modifiedon desc",
+            "$top": 200
+          }
+        },
+        "runAfter": { "Shape_contacts": ["Succeeded"] }
+      },
+      "Shape_applications": {
+        "type": "Select",
+        "inputs": {
+          "from": "@outputs('Get_applications')?['body/value']",
+          "select": {
+            "id": "@item()?['cws_jobapplicationid']",
+            "role": "@item()?['cws_role']",
+            "stage": "@item()?['cws_stage']",
+            "stageLabel": "@if(equals(item()?['cws_stage'],771670000),'Researching',if(equals(item()?['cws_stage'],771670001),'Applied',if(equals(item()?['cws_stage'],771670002),'Interviewing',if(equals(item()?['cws_stage'],771670003),'Offer','Closed'))))",
+            "businessGroup": "@coalesce(item()?['cws_BusinessGroup']?['cws_businessgroupname'],'')",
+            "dateApplied": "@if(empty(coalesce(item()?['cws_dateapplied'],'')),'',convertFromUtc(item()?['cws_dateapplied'],'Pacific Standard Time','yyyy-MM-dd'))",
+            "nextStep": "@coalesce(item()?['cws_nextstep'],'')",
+            "lastUpdated": "@convertFromUtc(item()?['modifiedon'],'Pacific Standard Time','yyyy-MM-dd')"
+          }
+        },
+        "runAfter": { "Get_applications": ["Succeeded"] }
+      },
+      "Get_business_groups": {
+        "type": "OpenApiConnection",
+        "inputs": {
+          "host": {
+            "connectionName": "shared_commondataserviceforapps",
+            "operationId": "ListRecords",
+            "apiId": "/providers/Microsoft.PowerApps/apis/shared_commondataserviceforapps"
+          },
+          "parameters": {
+            "entityName": "cws_businessgroups",
+            "$select": "cws_businessgroupid,cws_businessgroupname",
+            "$filter": "@concat('statecode eq 0 and _cws_company_value eq ', triggerBody()?['companyId'])",
+            "$orderby": "cws_businessgroupname asc",
+            "$top": 100
+          }
+        },
+        "runAfter": { "Shape_applications": ["Succeeded"] }
+      },
+      "Shape_business_groups": {
+        "type": "Select",
+        "inputs": {
+          "from": "@outputs('Get_business_groups')?['body/value']",
+          "select": {
+            "id": "@item()?['cws_businessgroupid']",
+            "name": "@item()?['cws_businessgroupname']"
+          }
+        },
+        "runAfter": { "Get_business_groups": ["Succeeded"] }
+      },
+      "Respond_to_the_agent": {
+        "type": "Response",
+        "kind": "Skills",
+        "inputs": {
+          "statusCode": 200,
+          "body": {
+            "companyId": "@triggerBody()?['companyId']",
+            "companyName": "@coalesce(body('Get_company')?['cws_companyname'],'')",
+            "contactCount": "@length(body('Shape_contacts'))",
+            "contacts": "@body('Shape_contacts')",
+            "applicationCount": "@length(body('Shape_applications'))",
+            "applications": "@body('Shape_applications')",
+            "businessGroups": "@body('Shape_business_groups')"
+          },
+          "schema": {
+            "type": "object",
+            "properties": {
+              "companyId": { "type": "string" },
+              "companyName": { "type": "string" },
+              "contactCount": { "type": "integer" },
+              "contacts": { "type": "array", "description": "Everyone recorded at this company" },
+              "applicationCount": { "type": "integer" },
+              "applications": { "type": "array", "description": "Open applications at this company, with stage" },
+              "businessGroups": { "type": "array", "description": "Business groups defined for this company" }
+            }
+          }
+        },
+        "runAfter": { "Shape_business_groups": ["Succeeded"] }
+      }
+    }
+  }
+}

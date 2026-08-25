@@ -1,0 +1,211 @@
+{
+  "name": "Agent — CreateContact",
+  "description": "Creates a Networking Contact. Contact Name, Company and Relationship are required; resolve the Company with ResolveRecord first and pass its GUID. Business Group is associated as a separate step and is never created.",
+  "definition": {
+    "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+      "$authentication": {
+        "defaultValue": {},
+        "type": "SecureObject"
+      },
+      "$connections": {
+        "defaultValue": {},
+        "type": "Object"
+      }
+    },
+    "triggers": {
+      "When_an_agent_calls_the_flow": {
+        "type": "Request",
+        "kind": "Skills",
+        "inputs": {
+          "schema": {
+            "type": "object",
+            "properties": {
+              "contactName": {
+                "type": "string",
+                "title": "contactName",
+                "description": "Full name of the contact"
+              },
+              "companyId": {
+                "type": "string",
+                "title": "companyId",
+                "description": "Company GUID from ResolveRecord"
+              },
+              "relationship": {
+                "type": "integer",
+                "title": "relationship",
+                "description": "771670000 Warm, 771670001 New, 771670002 Dormant, 771670003 Mentor, 771670004 Recruiter, 771670005 Hiring Manager"
+              },
+              "role": {
+                "type": "string",
+                "title": "role",
+                "description": "Job title at the company Pass the word none when it does not apply — never ask the user for this."
+              },
+              "email": {
+                "type": "string",
+                "title": "email",
+                "description": "Optional — pass an empty string when it does not apply; never ask the user for it. Pass the word none when it does not apply — never ask the user for this."
+              },
+              "city": {
+                "type": "string",
+                "title": "city",
+                "description": "Optional — pass an empty string when it does not apply; never ask the user for it. Pass the word none when it does not apply — never ask the user for this."
+              },
+              "businessGroupId": {
+                "type": "string",
+                "title": "businessGroupId",
+                "description": "Business Group GUID from ResolveRecord. Search only — Business Groups are never created. Pass the word none when it does not apply — never ask the user for this."
+              },
+              "notes": {
+                "type": "string",
+                "title": "notes",
+                "description": "Optional — pass an empty string when it does not apply; never ask the user for it. Pass the word none when it does not apply — never ask the user for this."
+              }
+            },
+            "required": [
+              "contactName",
+              "companyId",
+              "relationship",
+              "businessGroupId",
+              "role",
+              "email",
+              "city",
+              "notes"
+            ]
+          }
+        }
+      }
+    },
+    "actions": {
+      "Create_contact": {
+        "type": "OpenApiConnection",
+        "inputs": {
+          "host": {
+            "connectionName": "shared_commondataserviceforapps",
+            "operationId": "CreateRecord",
+            "apiId": "/providers/Microsoft.PowerApps/apis/shared_commondataserviceforapps"
+          },
+          "parameters": {
+            "entityName": "cws_networkingcontacts",
+            "item/cws_contactname": "@trim(triggerBody()?['contactName'])",
+            "item/cws_Company@odata.bind": "@concat('/cws_companies(', triggerBody()?['companyId'], ')')",
+            "item/cws_relationship": "@int(triggerBody()?['relationship'])",
+            "item/cws_role": "@if(equals(toLower(trim(coalesce(triggerBody()?['role'],''))),'none'),'',coalesce(triggerBody()?['role'],''))",
+            "item/cws_email": "@if(equals(toLower(trim(coalesce(triggerBody()?['email'],''))),'none'),'',coalesce(triggerBody()?['email'],''))",
+            "item/cws_city": "@if(equals(toLower(trim(coalesce(triggerBody()?['city'],''))),'none'),'',coalesce(triggerBody()?['city'],''))",
+            "item/cws_notes": "@if(equals(toLower(trim(coalesce(triggerBody()?['notes'],''))),'none'),'',coalesce(triggerBody()?['notes'],''))"
+          }
+        },
+        "runAfter": {}
+      },
+      "Associate_business_group": {
+        "type": "If",
+        "expression": {
+          "and": [
+            {
+              "equals": [
+                "@if(or(empty(coalesce(triggerBody()?['businessGroupId'],'')),equals(toLower(string(triggerBody()?['businessGroupId'])),'none')),'skip','bind')",
+                "bind"
+              ]
+            }
+          ]
+        },
+        "actions": {
+          "Set_business_group": {
+            "type": "OpenApiConnection",
+            "inputs": {
+              "host": {
+                "connectionName": "shared_commondataserviceforapps",
+                "operationId": "UpdateRecord",
+                "apiId": "/providers/Microsoft.PowerApps/apis/shared_commondataserviceforapps"
+              },
+              "parameters": {
+                "entityName": "cws_networkingcontacts",
+                "recordId": "@body('Create_contact')?['cws_networkingcontactid']",
+                "item/cws_BusinessGroup@odata.bind": "@concat('/cws_businessgroups(', triggerBody()?['businessGroupId'], ')')"
+              }
+            },
+            "runAfter": {}
+          }
+        },
+        "else": {
+          "actions": {}
+        },
+        "runAfter": {
+          "Create_contact": [
+            "Succeeded"
+          ]
+        }
+      },
+      "Read_back": {
+        "type": "OpenApiConnection",
+        "inputs": {
+          "host": {
+            "connectionName": "shared_commondataserviceforapps",
+            "operationId": "GetItem",
+            "apiId": "/providers/Microsoft.PowerApps/apis/shared_commondataserviceforapps"
+          },
+          "parameters": {
+            "entityName": "cws_networkingcontacts",
+            "recordId": "@body('Create_contact')?['cws_networkingcontactid']",
+            "$select": "cws_networkingcontactid,cws_contactname,cws_role,cws_email,cws_city,cws_relationship,cws_notes",
+            "$expand": "cws_Company($select=cws_companyname),cws_BusinessGroup($select=cws_businessgroupname)"
+          }
+        },
+        "runAfter": {
+          "Associate_business_group": [
+            "Succeeded"
+          ]
+        }
+      },
+      "Respond_to_the_agent": {
+        "type": "Response",
+        "kind": "Skills",
+        "inputs": {
+          "statusCode": 200,
+          "body": {
+            "id": "@body('Create_contact')?['cws_networkingcontactid']",
+            "contactName": "@body('Read_back')?['cws_contactname']",
+            "company": "@coalesce(body('Read_back')?['cws_Company']?['cws_companyname'],'')",
+            "businessGroup": "@coalesce(body('Read_back')?['cws_BusinessGroup']?['cws_businessgroupname'],'')",
+            "role": "@coalesce(body('Read_back')?['cws_role'],'')",
+            "email": "@coalesce(body('Read_back')?['cws_email'],'')",
+            "created": true
+          },
+          "schema": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "contactName": {
+                "type": "string"
+              },
+              "company": {
+                "type": "string"
+              },
+              "businessGroup": {
+                "type": "string"
+              },
+              "role": {
+                "type": "string"
+              },
+              "email": {
+                "type": "string"
+              },
+              "created": {
+                "type": "boolean"
+              }
+            }
+          }
+        },
+        "runAfter": {
+          "Read_back": [
+            "Succeeded"
+          ]
+        }
+      }
+    }
+  }
+}
