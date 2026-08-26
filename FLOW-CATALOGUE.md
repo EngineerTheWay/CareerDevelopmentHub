@@ -236,30 +236,3 @@ Revises an existing draft in place. Used whenever the user asks for changes — 
 
 Drafts currently in the Drafts folder, newest first, with full bodies. Lets the agent
 resolve "the email I was writing to Sarah" to a real `draftId` rather than guessing.
-
----
-
-## Deferred
-
-| Flow | Why deferred |
-|---|---|
-| `DormantContactSweep` | Should propose follow-ups, never auto-create. Nice-to-have |
-| `DataHygieneCheck` | Duplicate companies, orphaned junctions, applications missing a business group |
-| `WeeklyReview` (scheduled) | Trivial scheduled wrapper over flow 14, which now exists |
-
-## Existing
-
-`Daily Brief — Career Development Hub` — active, recurrence 08:00 Pacific, Flow bot DM.
-Keep as-is. Optionally refactor later to call flow 2 so the brief and the agent agree.
-
----
-
-## Open cleanup item
-
-The unused `cws_outlook_event_id`, `cws_outlook_calendar_id`, `cws_reminder_enabled`,
-`cws_reminder_start_at`, `cws_reminder_end_at`, `cws_reminder_all_day`,
-`cws_reminder_time_zone`, `cws_reminder_last_synced_at`, `cws_reminder_sync_error`, and
-`cws_reminder_snyc_status` columns remain on `cws_followup` (0 of 29 rows populated).
-
-Harmless to leave, but the agent reads table metadata and may try to populate them.
-Either delete them or name them off-limits in the agent instructions.
