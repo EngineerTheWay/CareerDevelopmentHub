@@ -39,6 +39,7 @@ flowchart TD
 ```
 
 ---
+
 ## Data model
 
 Seven tables:
@@ -49,14 +50,14 @@ Seven tables:
 - **ContactApplication** — many-to-many, so one person can relate to several applications
 
 ---
-  
+
 ## The application surfaces
 
 | Surface | Built with | Used for |
 |---|---|---|
-| [Code app](CareerDevelopmentHubCode/apps/career-development-hub/) | React 19, Vite, Tailwind 4, TanStack Query + Table, react-hook-form, Zod | Full CRUD, bulk edit, filtering |
-| [Model-driven page](ModelApp/career-hub-dashboard/) | Generative page, Fluent UI, `dataApi` | Stat tiles that drill into saved views |
-| [Quick Capture](CareerDevelopmentHubCanvas/) | Canvas app, phone layout | Fast entry during a call or event |
+| [Code app](code-app/) | React 19, Vite, Tailwind 4, TanStack Query + Table, react-hook-form, Zod | Full CRUD, bulk edit, filtering |
+| [Model-driven page](model-app/dashboard/) | Generative page, Fluent UI, `dataApi` | Stat tiles that drill into saved views |
+| [Quick Capture](canvas-app/) | Canvas app, phone layout | Fast entry during a call or event |
 
 ---
 
@@ -66,8 +67,12 @@ Seven tables:
 is **21 typed Power Automate flows** ([`flows/definitions/`](flows/definitions/)); it has no
 direct database access.
 
+One flow in this repo is **not** part of that surface. [`flows/scheduled/daily-brief.json`](flows/scheduled/daily-brief.json)
+runs on a timer at 8am and posts the day's follow-ups and calendar to Teams. It predates the
+agent, isn't bound as a tool, and the agent can't call it.
+
 The flows are typed per task rather than exposed as one generic write. From my design notes
-in [`FLOW-CATALOGUE.md`](FLOW-CATALOGUE.md):
+in [`docs/FLOW-CATALOGUE.md`](docs/FLOW-CATALOGUE.md):
 
 > Type by **task shape**, not by table — but stop before a single generic
 > `DoThing(table, action, payload)`. The typed parameter list is the reliability mechanism:
@@ -82,7 +87,7 @@ a behaviour to each: use `exact`, confirm on `close`, show candidates and stop o
 The same pattern guards destructive calls. `DeleteRecord` takes a `confirmToken` and
 `SendDraft` takes a `confirmSubject` that must match the real draft.
 
-[`FLOW-CATALOGUE.md`](FLOW-CATALOGUE.md) also records a decision that was reversed mid-build:
+[`docs/FLOW-CATALOGUE.md`](docs/FLOW-CATALOGUE.md) also records a decision that was reversed mid-build:
 email started out scoped *outside* the flow layer, then moved into it.
 
 ---
@@ -95,14 +100,14 @@ rejects them. Records created *in the code app* passed, because the client gener
 uuid — but anything created by the model-driven app, the canvas app, or a flow could not be
 deleted or fetched by id, failing with `The recordId is not valid for this data source`.
 Fixed by overriding `isValidRecordId` in
-[`dataverse-data-source-operations.ts`](CareerDevelopmentHubCode/apps/career-development-hub/app-gen-sdk/data/dataverse/dataverse-data-source-operations.ts).
+[`dataverse-data-source-operations.ts`](code-app/app-gen-sdk/data/dataverse/dataverse-data-source-operations.ts).
 
 This only surfaced because four surfaces write to the same tables.
 
 **The data layer can drift from Dataverse silently.** It's hand-maintained, so a renamed or
 deleted column stays in the mapping and fails at runtime — an unmapped choice is dropped with
 a warning, a stale column is rejected with a generic error.
-[`check-drift.mjs`](CareerDevelopmentHubCode/apps/career-development-hub/scripts/check-drift.mjs)
+[`check-drift.mjs`](code-app/scripts/check-drift.mjs)
 selects every mapped column from every table and compares choice columns against `stringmap`.
 This was tested and successfully caught a column removed from the schema that was still in the mapping after manual deletion from Dataverse.
 
@@ -129,20 +134,31 @@ working through the Power Platform issues above. This helped troubleshoot issues
 
 ## Repo map
 
-**Written by hand**
+```
+agent/        instructions, evals, and the scripts that bind flows as agent tools
+flows/        21 agent tool definitions, plus the scheduled daily brief
+code-app/     React code app
+model-app/    generative dashboard page and four form web resources
+canvas-app/   five screens of Power Fx
+docs/         design notes written before the code they describe
+```
 
-- `agent/` — instructions, evals, and the scripts that bind flows to the agent as tools
-- `flows/definitions/` — all 21 flow definitions
-- `src/pages/`, `src/hooks/`, `src/lib/`, and the non-`ui/` `src/components/` — ~26 files
-- `ModelApp/` — the generative page and four web resources
-- `CareerDevelopmentHubCanvas/` — five screens of Power Fx
-- `canvas-plan/`, `FLOW-CATALOGUE.md` — design docs written before the code
+**Project source** — authored for this solution. I used Claude Code as a development partner
+throughout, so plenty of this was written with AI assistance and then reviewed, corrected,
+and tested by me. The design decisions, the data model, and the debugging are mine.
 
-**Scaffolded or generated**, included so the app builds:
+- `agent/`, `flows/` — instructions, the 21 flow definitions, the deploy and test scripts
+- `code-app/src/` — pages, hooks, lib, and the non-`ui/` components (~26 files)
+- `model-app/` — the generative page and four web resources
+- `canvas-app/` — five screens of Power Fx
+- `docs/` — the flow catalogue and the canvas app plan, written before the code they describe
 
-- `src/components/ui/` — shadcn/ui primitives (53 files)
-- `src/generated/` — models, services, validators generated from the Dataverse schema (35 files)
-- `app-gen-sdk/` — vendored Power Apps SDK (47 files)
+**Generated or scaffolded**, included so the app builds — not representative work:
+
+- `code-app/src/components/ui/` — shadcn/ui primitives (53 files)
+- `code-app/src/generated/` — models, services, and validators generated from the Dataverse schema (35 files)
+- `code-app/app-gen-sdk/` — vendored Power Apps SDK (47 files)
+- `model-app/dashboard/genpage.d.ts`, `RuntimeTypes.ts` — generated from the Dataverse schema
 
 ---
 
@@ -153,4 +169,4 @@ a script that copies hand-written source, rewrites tenant identifiers to placeho
 re-scans its own output and fails if any GUID, org URL, email, or local path survives.
 Placeholders like `<ENVIRONMENT_ID>` are that process, not omissions.
 
-No solution export, `.msapp`, or environment state is published here. Solution version control is kept in a Azure DevOps repo.
+No solution export, `.msapp`, or environment state is published here. Solution version control is kept in an Azure DevOps repo.

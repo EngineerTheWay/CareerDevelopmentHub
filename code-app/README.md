@@ -7,10 +7,9 @@
 
 A React app running as a **Power Apps code app**. It deploys into a Power Platform
 environment and reads and writes Dataverse through the `@microsoft/power-apps` SDK, so
-authentication, hosting, and data access come from the platform rather than a backend of its
-own.
+authentication, hosting, and data access come from the platform.
 
-One of four surfaces over a shared Dataverse model — see the [repository root](../../../).
+One of four surfaces over a shared Dataverse model — see the [repository root](../).
 
 ## Stack
 

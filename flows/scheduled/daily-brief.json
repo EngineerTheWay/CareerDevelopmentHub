@@ -1,0 +1,303 @@
+{
+  "name": "Daily Brief — Career Development Hub",
+  "description": "Scheduled daily briefing. Posts today's follow-ups, overdue items, and calendar events to Teams at 8am Pacific. NOT an agent tool - this runs on a timer and is never called by Career Copilot.",
+  "definition": {
+    "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+      "$connections": {
+        "defaultValue": {},
+        "type": "Object"
+      },
+      "$authentication": {
+        "defaultValue": {},
+        "type": "SecureObject"
+      }
+    },
+    "triggers": {
+      "Daily_at_8_AM_Pacific": {
+        "recurrence": {
+          "frequency": "Week",
+          "interval": 1,
+          "timeZone": "Pacific Standard Time",
+          "startTime": "2026-08-18T08:00:00",
+          "schedule": {
+            "weekDays": [
+              "Monday",
+              "Tuesday",
+              "Wednesday",
+              "Thursday",
+              "Friday"
+            ],
+            "hours": [
+              "8"
+            ],
+            "minutes": [
+              0
+            ]
+          }
+        },
+        "metadata": {},
+        "type": "Recurrence"
+      }
+    },
+    "actions": {
+      "Today_Pacific": {
+        "runAfter": {},
+        "metadata": {},
+        "type": "Compose",
+        "inputs": "@formatDateTime(convertFromUtc(utcNow(), 'Pacific Standard Time'), 'yyyy-MM-dd')"
+      },
+      "Day_Window": {
+        "runAfter": {
+          "Today_Pacific": [
+            "Succeeded"
+          ]
+        },
+        "metadata": {},
+        "type": "Compose",
+        "inputs": {
+          "startUtc": "@convertToUtc(concat(outputs('Today_Pacific'), 'T00:00:00'), 'Pacific Standard Time', 'yyyy-MM-ddTHH:mm:ss')",
+          "endUtc": "@convertToUtc(concat(outputs('Today_Pacific'), 'T23:59:59'), 'Pacific Standard Time', 'yyyy-MM-ddTHH:mm:ss')",
+          "friendlyDate": "@formatDateTime(convertFromUtc(utcNow(), 'Pacific Standard Time'), 'dddd, MMMM d, yyyy')",
+          "filterStartUtc": "@concat(convertToUtc(concat(outputs('Today_Pacific'), 'T00:00:00'), 'Pacific Standard Time', 'yyyy-MM-ddTHH:mm:ss'), 'Z')",
+          "filterEndUtc": "@concat(convertToUtc(concat(formatDateTime(addDays(outputs('Today_Pacific'), 1), 'yyyy-MM-dd'), 'T00:00:00'), 'Pacific Standard Time', 'yyyy-MM-ddTHH:mm:ss'), 'Z')"
+        }
+      },
+      "Get_todays_follow_ups": {
+        "runAfter": {
+          "Day_Window": [
+            "Succeeded"
+          ]
+        },
+        "metadata": {},
+        "type": "OpenApiConnection",
+        "inputs": {
+          "host": {
+            "connectionName": "shared_commondataserviceforapps",
+            "operationId": "ListRecords",
+            "apiId": "/providers/Microsoft.PowerApps/apis/shared_commondataserviceforapps"
+          },
+          "parameters": {
+            "entityName": "cws_followups",
+            "$select": "cws_followupid,cws_title,cws_duedate,cws_notes,cws_relatedtype",
+            "$filter": "statecode eq 0 and cws_status eq 771670000 and cws_duedate ge @{outputs('Day_Window')['filterStartUtc']} and cws_duedate lt @{outputs('Day_Window')['filterEndUtc']}",
+            "$orderby": "cws_title asc",
+            "$expand": "cws_RelatedContact($select=cws_contactname;$expand=cws_Company($select=cws_companyname)),cws_RelatedApplication($select=cws_role;$expand=cws_Company($select=cws_companyname))"
+          }
+        }
+      },
+      "Get_overdue_follow_ups": {
+        "runAfter": {
+          "Get_todays_follow_ups": [
+            "Succeeded"
+          ]
+        },
+        "metadata": {},
+        "type": "OpenApiConnection",
+        "inputs": {
+          "host": {
+            "connectionName": "shared_commondataserviceforapps",
+            "operationId": "ListRecords",
+            "apiId": "/providers/Microsoft.PowerApps/apis/shared_commondataserviceforapps"
+          },
+          "parameters": {
+            "entityName": "cws_followups",
+            "$select": "cws_followupid,cws_title,cws_duedate,cws_notes,cws_relatedtype",
+            "$filter": "statecode eq 0 and cws_status eq 771670000 and cws_duedate lt @{outputs('Day_Window')['filterStartUtc']}",
+            "$orderby": "cws_duedate asc",
+            "$expand": "cws_RelatedContact($select=cws_contactname;$expand=cws_Company($select=cws_companyname)),cws_RelatedApplication($select=cws_role;$expand=cws_Company($select=cws_companyname))"
+          }
+        }
+      },
+      "Get_calendar_view": {
+        "runAfter": {
+          "Get_overdue_follow_ups": [
+            "Succeeded"
+          ]
+        },
+        "metadata": {},
+        "type": "OpenApiConnection",
+        "inputs": {
+          "host": {
+            "connectionName": "shared_office365",
+            "operationId": "GetEventsCalendarViewV3",
+            "apiId": "/providers/Microsoft.PowerApps/apis/shared_office365"
+          },
+          "parameters": {
+            "calendarId": "AQMkADlmNmM1Y2VkLTUyYTUtNDgxMQAtOGFlYi1mNGIzMjk1ZmFkOGEARgAAA-Ax2mV1fwBGqsls47qrTcoHACzvAab00ytNnwHOtTIDwloAAAIBBgAAACzvAab00ytNnwHOtTIDwloAAAKiIwAAAA==",
+            "startDateTimeUtc": "@{outputs('Day_Window')['startUtc']}",
+            "endDateTimeUtc": "@{outputs('Day_Window')['endUtc']}",
+            "$orderby": "start/dateTime asc"
+          }
+        }
+      },
+      "Select_today_lines": {
+        "runAfter": {
+          "Get_calendar_view": [
+            "Succeeded"
+          ]
+        },
+        "metadata": {},
+        "type": "Select",
+        "inputs": {
+          "from": "@body('Get_todays_follow_ups')?['value']",
+          "select": "@concat('• ', item()?['cws_title'], if(and(empty(coalesce(item()?['cws_RelatedApplication']?['cws_role'], item()?['cws_RelatedContact']?['cws_contactname'], '')), empty(coalesce(item()?['cws_RelatedApplication']?['cws_Company']?['cws_companyname'], item()?['cws_RelatedContact']?['cws_Company']?['cws_companyname'], ''))), '', concat(' — ', if(empty(coalesce(item()?['cws_RelatedApplication']?['cws_role'], item()?['cws_RelatedContact']?['cws_contactname'], '')), coalesce(item()?['cws_RelatedApplication']?['cws_Company']?['cws_companyname'], item()?['cws_RelatedContact']?['cws_Company']?['cws_companyname'], ''), if(empty(coalesce(item()?['cws_RelatedApplication']?['cws_Company']?['cws_companyname'], item()?['cws_RelatedContact']?['cws_Company']?['cws_companyname'], '')), coalesce(item()?['cws_RelatedApplication']?['cws_role'], item()?['cws_RelatedContact']?['cws_contactname'], ''), concat(coalesce(item()?['cws_RelatedApplication']?['cws_role'], item()?['cws_RelatedContact']?['cws_contactname'], ''), ' at ', coalesce(item()?['cws_RelatedApplication']?['cws_Company']?['cws_companyname'], item()?['cws_RelatedContact']?['cws_Company']?['cws_companyname'], '')))))))"
+        }
+      },
+      "Select_overdue_lines": {
+        "runAfter": {
+          "Select_today_lines": [
+            "Succeeded"
+          ]
+        },
+        "metadata": {},
+        "type": "Select",
+        "inputs": {
+          "from": "@body('Get_overdue_follow_ups')?['value']",
+          "select": "@concat('• Due ', formatDateTime(item()?['cws_duedate'], 'MMM d'), ' — ', item()?['cws_title'], if(and(empty(coalesce(item()?['cws_RelatedApplication']?['cws_role'], item()?['cws_RelatedContact']?['cws_contactname'], '')), empty(coalesce(item()?['cws_RelatedApplication']?['cws_Company']?['cws_companyname'], item()?['cws_RelatedContact']?['cws_Company']?['cws_companyname'], ''))), '', concat(' — ', if(empty(coalesce(item()?['cws_RelatedApplication']?['cws_role'], item()?['cws_RelatedContact']?['cws_contactname'], '')), coalesce(item()?['cws_RelatedApplication']?['cws_Company']?['cws_companyname'], item()?['cws_RelatedContact']?['cws_Company']?['cws_companyname'], ''), if(empty(coalesce(item()?['cws_RelatedApplication']?['cws_Company']?['cws_companyname'], item()?['cws_RelatedContact']?['cws_Company']?['cws_companyname'], '')), coalesce(item()?['cws_RelatedApplication']?['cws_role'], item()?['cws_RelatedContact']?['cws_contactname'], ''), concat(coalesce(item()?['cws_RelatedApplication']?['cws_role'], item()?['cws_RelatedContact']?['cws_contactname'], ''), ' at ', coalesce(item()?['cws_RelatedApplication']?['cws_Company']?['cws_companyname'], item()?['cws_RelatedContact']?['cws_Company']?['cws_companyname'], '')))))))"
+        }
+      },
+      "Select_calendar_lines": {
+        "runAfter": {
+          "Select_overdue_lines": [
+            "Succeeded"
+          ]
+        },
+        "metadata": {},
+        "type": "Select",
+        "inputs": {
+          "from": "@body('Get_calendar_view')?['value']",
+          "select": "@concat('• ', if(equals(item()?['isAllDay'], true), 'All day', concat(convertTimeZone(item()?['start'], 'UTC', 'Pacific Standard Time', 'h:mm tt'), ' – ', convertTimeZone(item()?['end'], 'UTC', 'Pacific Standard Time', 'h:mm tt'))), ' — ', item()?['subject'])"
+        }
+      },
+      "Card_body_core": {
+        "runAfter": {
+          "Select_calendar_lines": [
+            "Succeeded"
+          ]
+        },
+        "metadata": {},
+        "type": "Compose",
+        "inputs": [
+          {
+            "type": "TextBlock",
+            "id": "hdrTitle",
+            "text": "Daily Brief",
+            "size": "Large",
+            "weight": "Bolder",
+            "wrap": true
+          },
+          {
+            "type": "TextBlock",
+            "id": "hdrDate",
+            "text": "@{outputs('Day_Window')['friendlyDate']}",
+            "isSubtle": true,
+            "spacing": "None",
+            "wrap": true
+          },
+          {
+            "type": "TextBlock",
+            "id": "todayHdr",
+            "text": "Follow-ups due today",
+            "weight": "Bolder",
+            "separator": true,
+            "spacing": "Medium",
+            "wrap": true
+          },
+          {
+            "type": "TextBlock",
+            "id": "todayBody",
+            "text": "@{if(empty(body('Select_today_lines')), 'No follow-ups for today', join(body('Select_today_lines'), decodeUriComponent('%0A')))}",
+            "wrap": true,
+            "spacing": "Small"
+          },
+          {
+            "type": "TextBlock",
+            "id": "calHdr",
+            "text": "Calendar",
+            "weight": "Bolder",
+            "separator": true,
+            "spacing": "Medium",
+            "wrap": true
+          },
+          {
+            "type": "TextBlock",
+            "id": "calBody",
+            "text": "@{if(empty(body('Select_calendar_lines')), 'Calendar is open today', join(body('Select_calendar_lines'), decodeUriComponent('%0A')))}",
+            "wrap": true,
+            "spacing": "Small"
+          }
+        ]
+      },
+      "Card_body_overdue": {
+        "runAfter": {
+          "Card_body_core": [
+            "Succeeded"
+          ]
+        },
+        "metadata": {},
+        "type": "Compose",
+        "inputs": [
+          {
+            "type": "TextBlock",
+            "id": "odHdr",
+            "text": "@{concat('Overdue follow-ups (', string(length(body('Select_overdue_lines'))), ')')}",
+            "weight": "Bolder",
+            "color": "Attention",
+            "separator": true,
+            "spacing": "Medium",
+            "wrap": true
+          },
+          {
+            "type": "TextBlock",
+            "id": "odBody",
+            "text": "@{join(body('Select_overdue_lines'), decodeUriComponent('%0A'))}",
+            "wrap": true,
+            "spacing": "Small"
+          }
+        ]
+      },
+      "Build_card": {
+        "runAfter": {
+          "Card_body_overdue": [
+            "Succeeded"
+          ]
+        },
+        "metadata": {},
+        "type": "Compose",
+        "inputs": {
+          "type": "AdaptiveCard",
+          "$schema": "http://adaptivecards.io/schemas/adaptive-card.json",
+          "version": "1.4",
+          "msteams": {
+            "width": "Full"
+          },
+          "body": "@if(empty(body('Select_overdue_lines')), outputs('Card_body_core'), union(outputs('Card_body_core'), outputs('Card_body_overdue')))"
+        }
+      },
+      "Post_daily_brief": {
+        "runAfter": {
+          "Build_card": [
+            "Succeeded"
+          ]
+        },
+        "metadata": {},
+        "type": "OpenApiConnection",
+        "inputs": {
+          "host": {
+            "connectionName": "shared_teams",
+            "operationId": "PostCardToConversation",
+            "apiId": "/providers/Microsoft.PowerApps/apis/shared_teams"
+          },
+          "parameters": {
+            "poster": "Flow bot",
+            "location": "Chat with Flow bot",
+            "body/recipient": "you@example.com",
+            "body/messageBody": "@{string(outputs('Build_card'))}"
+          }
+        }
+      }
+    }
+  }
+}
