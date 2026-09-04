@@ -13,8 +13,10 @@ import { Textarea } from '@/components/ui/textarea';
 import { RefinedSearchBox, type RefinedSearchOption } from '@/components/refined-search-box';
 import { FollowUpForm, createDefaultFollowUp, type FollowUpFormValue } from '@/components/follow-up-form';
 import { Separator } from '@/components/ui/separator';
+import { useContactApplicationList } from '@/generated/hooks/use-contact-application';
 import { useCreateFollowUp, useDeleteFollowUp, useUpdateFollowUp } from '@/generated/hooks/use-follow-up';
 import { useCreateInteraction, useDeleteInteraction } from '@/generated/hooks/use-interaction';
+import type { ContactApplication } from '@/generated/models/contact-application-model';
 import { InteractionInteractionTypeKeyToLabel, type InteractionInteractionTypeKey } from '@/generated/models/interaction-model';
 import type { FollowUp } from '@/generated/models/follow-up-model';
 import type { JobApplication } from '@/generated/models/job-application-model';
@@ -74,6 +76,7 @@ const toFormValue = (followUp: FollowUp): FollowUpFormValue => {
 
 export function FollowUpCell({ followUps, item, type, label }: FollowUpCellProps) {
   const { contacts, applications } = useCareerData();
+  const { data: contactApplicationData = [] } = useContactApplicationList();
   const createFollowUp = useCreateFollowUp();
   const deleteFollowUp = useDeleteFollowUp();
   const updateFollowUp = useUpdateFollowUp();
@@ -128,7 +131,16 @@ export function FollowUpCell({ followUps, item, type, label }: FollowUpCellProps
   const buildCompleteInteractionForm = (followUp: FollowUp): CompleteInteractionForm => {
     const relatedContact = followUp.relatedTypeKey === 'Contact' ? contacts.find((contact: NetworkingContact) => contact.id === followUp.relatedContact?.id) : undefined;
     const relatedApplication = followUp.relatedTypeKey === 'Application' ? applications.find((application: JobApplication) => application.id === followUp.relatedApplication?.id) : undefined;
-    const applicationContact = relatedApplication ? contacts.find((contact: NetworkingContact) => contact.company?.id && contact.company?.id === relatedApplication.company?.id) : undefined;
+    // Completing a follow-up logs an interaction, and an interaction is a conversation
+    // with a specific person — a wrong default becomes wrong history. This used to grab
+    // whichever contact happened to be first at the same company, which is arbitrary.
+    // Prefer contacts actually linked to the application, and only prefill when there
+    // is exactly one; otherwise leave it blank so the choice is deliberate.
+    const linkedApplicationContacts = relatedApplication
+      ? contacts.filter((contact: NetworkingContact) => contactApplicationData.some((association: ContactApplication) =>
+          association?.jobApplication?.id === relatedApplication.id && association?.networkingContact?.id === contact.id))
+      : [];
+    const applicationContact = linkedApplicationContacts.length === 1 ? linkedApplicationContacts[0] : undefined;
     const defaultContact = relatedContact ?? applicationContact;
     const dueDate = dateKeyToLocalDate(followUp.dueDate);
     const todayDate = dateKeyToLocalDate(today()) ?? new Date();
