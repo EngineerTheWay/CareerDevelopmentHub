@@ -5,6 +5,13 @@
     "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
     "contentVersion": "1.0.0.0",
     "parameters": {
+      "cws_TimeZone (cws_TimeZone)": {
+        "defaultValue": "Pacific Standard Time",
+        "type": "String",
+        "metadata": {
+          "schemaName": "cws_TimeZone"
+        }
+      },
       "$authentication": {
         "defaultValue": {},
         "type": "SecureObject"
@@ -45,9 +52,9 @@
       "Window": {
         "type": "Compose",
         "inputs": {
-          "today": "@convertFromUtc(utcNow(),'Pacific Standard Time','yyyy-MM-dd')",
-          "stalledBefore": "@convertFromUtc(addDays(utcNow(), mul(-1, if(or(empty(coalesce(triggerBody()?['stalledDays'],'')),equals(toLower(string(triggerBody()?['stalledDays'])),'none')),21,int(triggerBody()?['stalledDays'])))),'Pacific Standard Time','yyyy-MM-dd')",
-          "dormantBeforeUtc": "@concat(convertFromUtc(addDays(utcNow(), mul(-1, if(or(empty(coalesce(triggerBody()?['dormantDays'],'')),equals(toLower(string(triggerBody()?['dormantDays'])),'none')),60,int(triggerBody()?['dormantDays'])))),'Pacific Standard Time','yyyy-MM-dd'),'T00:00:00Z')"
+          "today": "@convertFromUtc(utcNow(),parameters('cws_TimeZone (cws_TimeZone)'),'yyyy-MM-dd')",
+          "stalledBefore": "@convertFromUtc(addDays(utcNow(), mul(-1, if(or(empty(coalesce(triggerBody()?['stalledDays'],'')),equals(toLower(string(triggerBody()?['stalledDays'])),'none')),21,int(triggerBody()?['stalledDays'])))),parameters('cws_TimeZone (cws_TimeZone)'),'yyyy-MM-dd')",
+          "dormantBeforeUtc": "@concat(convertFromUtc(addDays(utcNow(), mul(-1, if(or(empty(coalesce(triggerBody()?['dormantDays'],'')),equals(toLower(string(triggerBody()?['dormantDays'])),'none')),60,int(triggerBody()?['dormantDays'])))),parameters('cws_TimeZone (cws_TimeZone)'),'yyyy-MM-dd'),'T00:00:00Z')"
         },
         "runAfter": {}
       },
@@ -85,7 +92,7 @@
             "stage": "@item()?['cws_stage']",
             "stageLabel": "@if(equals(item()?['cws_stage'],771670000),'Researching',if(equals(item()?['cws_stage'],771670001),'Applied',if(equals(item()?['cws_stage'],771670002),'Interviewing','Offer')))",
             "nextStep": "@coalesce(item()?['cws_nextstep'],'')",
-            "lastUpdated": "@convertFromUtc(item()?['modifiedon'],'Pacific Standard Time','yyyy-MM-dd')"
+            "lastUpdated": "@convertFromUtc(item()?['modifiedon'],parameters('cws_TimeZone (cws_TimeZone)'),'yyyy-MM-dd')"
           }
         },
         "runAfter": {

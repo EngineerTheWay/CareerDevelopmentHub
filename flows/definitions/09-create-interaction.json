@@ -5,6 +5,13 @@
     "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
     "contentVersion": "1.0.0.0",
     "parameters": {
+      "cws_TimeZone (cws_TimeZone)": {
+        "defaultValue": "Pacific Standard Time",
+        "type": "String",
+        "metadata": {
+          "schemaName": "cws_TimeZone"
+        }
+      },
       "$authentication": {
         "defaultValue": {},
         "type": "SecureObject"
@@ -64,7 +71,7 @@
         "type": "Compose",
         "inputs": {
           "typeLabel": "@if(equals(string(triggerBody()?['interactionType']),'771670000'),'Networking Chat',if(equals(string(triggerBody()?['interactionType']),'771670001'),'LinkedIn',if(equals(string(triggerBody()?['interactionType']),'771670002'),'Email',if(equals(string(triggerBody()?['interactionType']),'771670003'),'Call',if(equals(string(triggerBody()?['interactionType']),'771670004'),'Meeting',if(equals(string(triggerBody()?['interactionType']),'771670005'),'Event',if(equals(string(triggerBody()?['interactionType']),'771670006'),'Interview','Other')))))))",
-          "dateLocal": "@if(or(empty(coalesce(triggerBody()?['interactionDate'],'')),equals(toLower(trim(string(triggerBody()?['interactionDate']))),'none')), convertFromUtc(utcNow(),'Pacific Standard Time','yyyy-MM-dd'), triggerBody()?['interactionDate'])"
+          "dateLocal": "@if(or(empty(coalesce(triggerBody()?['interactionDate'],'')),equals(toLower(trim(string(triggerBody()?['interactionDate']))),'none')), convertFromUtc(utcNow(),parameters('cws_TimeZone (cws_TimeZone)'),'yyyy-MM-dd'), triggerBody()?['interactionDate'])"
         },
         "runAfter": {}
       },
@@ -79,7 +86,7 @@
           "parameters": {
             "entityName": "cws_interactions",
             "item/cws_interactiontype": "@int(triggerBody()?['interactionType'])",
-            "item/cws_interactiondate": "@convertToUtc(concat(outputs('Meta')['dateLocal'],'T00:00:00'),'Pacific Standard Time')",
+            "item/cws_interactiondate": "@outputs('Meta')['dateLocal']",
             "item/cws_notes": "@if(equals(toLower(trim(coalesce(triggerBody()?['notes'],''))),'none'),'',coalesce(triggerBody()?['notes'],''))",
             "item/cws_interactionname": "@outputs('Meta')['typeLabel']",
             "item/cws_Contact@odata.bind": "@concat('/cws_networkingcontacts(', triggerBody()?['contactId'], ')')"
@@ -153,7 +160,7 @@
       },
       "Compose_name": {
         "type": "Compose",
-        "inputs": "@if(greater(length(concat(outputs('Meta')['typeLabel'], if(empty(coalesce(body('Read_back')?['cws_Contact']?['cws_contactname'],'')),'',concat(' with ',body('Read_back')?['cws_Contact']?['cws_contactname'])), ' on ', formatDateTime(convertFromUtc(body('Read_back')?['cws_interactiondate'],'Pacific Standard Time'),'MMM dd, yyyy'))),850), substring(concat(outputs('Meta')['typeLabel'], if(empty(coalesce(body('Read_back')?['cws_Contact']?['cws_contactname'],'')),'',concat(' with ',body('Read_back')?['cws_Contact']?['cws_contactname'])), ' on ', formatDateTime(convertFromUtc(body('Read_back')?['cws_interactiondate'],'Pacific Standard Time'),'MMM dd, yyyy')),0,850), concat(outputs('Meta')['typeLabel'], if(empty(coalesce(body('Read_back')?['cws_Contact']?['cws_contactname'],'')),'',concat(' with ',body('Read_back')?['cws_Contact']?['cws_contactname'])), ' on ', formatDateTime(convertFromUtc(body('Read_back')?['cws_interactiondate'],'Pacific Standard Time'),'MMM dd, yyyy')))",
+        "inputs": "@if(greater(length(concat(outputs('Meta')['typeLabel'], if(empty(coalesce(body('Read_back')?['cws_Contact']?['cws_contactname'],'')),'',concat(' with ',body('Read_back')?['cws_Contact']?['cws_contactname'])), ' on ', formatDateTime(body('Read_back')?['cws_interactiondate'],'MMM dd, yyyy'))),850), substring(concat(outputs('Meta')['typeLabel'], if(empty(coalesce(body('Read_back')?['cws_Contact']?['cws_contactname'],'')),'',concat(' with ',body('Read_back')?['cws_Contact']?['cws_contactname'])), ' on ', formatDateTime(body('Read_back')?['cws_interactiondate'],'MMM dd, yyyy')),0,850), concat(outputs('Meta')['typeLabel'], if(empty(coalesce(body('Read_back')?['cws_Contact']?['cws_contactname'],'')),'',concat(' with ',body('Read_back')?['cws_Contact']?['cws_contactname'])), ' on ', formatDateTime(body('Read_back')?['cws_interactiondate'],'MMM dd, yyyy')))",
         "runAfter": {
           "Read_back": [
             "Succeeded"
@@ -188,7 +195,7 @@
           "body": {
             "id": "@body('Create_interaction')?['cws_interactionid']",
             "name": "@outputs('Compose_name')",
-            "date": "@convertFromUtc(body('Read_back')?['cws_interactiondate'],'Pacific Standard Time','yyyy-MM-dd')",
+            "date": "@formatDateTime(body('Read_back')?['cws_interactiondate'],'yyyy-MM-dd')",
             "typeLabel": "@outputs('Meta')['typeLabel']",
             "contact": "@coalesce(body('Read_back')?['cws_Contact']?['cws_contactname'],'')",
             "application": "@coalesce(body('Read_back')?['cws_RelatedApplication']?['cws_role'],'')",

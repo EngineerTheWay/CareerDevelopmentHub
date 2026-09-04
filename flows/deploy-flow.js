@@ -19,11 +19,34 @@
 
 const { execFileSync } = require('child_process');
 const fs = require('fs');
+const os = require('os');
 const path = require('path');
+
+// Locate the plugin's dataverse-request.js without pinning a user profile or a
+// plugin version — both change between machines and plugin updates. Set the
+// DV_REQUEST env var to override if the plugin cache lives somewhere else.
+function resolveDvRequest() {
+  if (process.env.DV_REQUEST) return process.env.DV_REQUEST;
+  const base = path.join(os.homedir(), '.claude', 'plugins', 'cache', 'power-platform-skills', 'model-apps');
+  let entries = [];
+  try {
+    entries = fs.readdirSync(base);
+  } catch {
+    throw new Error(`Cannot find the power-platform-skills plugin cache at ${base}. Set DV_REQUEST to the full path of dataverse-request.js.`);
+  }
+  const found = entries
+    .map((version) => ({ version, file: path.join(base, version, 'scripts', 'dataverse-request.js') }))
+    .filter((candidate) => fs.existsSync(candidate.file))
+    .sort((a, b) => a.version.localeCompare(b.version, undefined, { numeric: true }));
+  if (!found.length) {
+    throw new Error(`No scripts/dataverse-request.js under ${base}. Set DV_REQUEST to the full path.`);
+  }
+  return found[found.length - 1].file;
+}
 
 const ENV_URL = 'https://<ORG_NAME>.crm.dynamics.com';
 const SOLUTION = 'CareerDevelopmentHub';
-const DV_REQUEST = '<PAC_SKILLS_PATH>/model-apps/2.4.4/scripts/dataverse-request.js';
+const DV_REQUEST = resolveDvRequest();
 const COMPONENT_TYPE_WORKFLOW = 29;
 // workflow.modernflowtype: 0 = PowerAutomateFlow, 1 = CopilotStudioFlow, 2 = M365CopilotAgentFlow.
 // Setting 1 at creation makes the flow an AGENT FLOW from birth, so it is managed and
@@ -49,7 +72,11 @@ const ALL_CONNECTION_REFERENCES = {
   },
 };
 
-function connectionRefsFor(definition) {
+// ALL_CONNECTION_REFERENCES above describes the AGENT flows. Anything else — the
+// scheduled brief, for one — binds to its own connection references and must
+// declare them, or it would be silently repointed at the agent's connections.
+// A spec's "connectionReferences" maps connectorName -> connectionReferenceLogicalName.
+function connectionRefsFor(definition, specRefs) {
   const used = new Set();
   const walk = (node) => {
     if (!node || typeof node !== 'object') return;
@@ -62,8 +89,20 @@ function connectionRefsFor(definition) {
 
   const refs = {};
   for (const name of used) {
+    const declared = specRefs && specRefs[name];
+    if (declared) {
+      refs[name] = {
+        runtimeSource: 'embedded',
+        connection: { connectionReferenceLogicalName: declared },
+        api: { name },
+      };
+      continue;
+    }
     if (!ALL_CONNECTION_REFERENCES[name]) {
-      throw new Error(`No connection reference configured for connector "${name}"`);
+      throw new Error(
+        `No connection reference configured for connector "${name}". ` +
+        `Add it to ALL_CONNECTION_REFERENCES, or declare "connectionReferences": { "${name}": "<logical name>" } in the spec.`
+      );
     }
     refs[name] = ALL_CONNECTION_REFERENCES[name];
   }
@@ -93,7 +132,7 @@ function odataQuote(value) {
 }
 
 function findWorkflowByName(name) {
-  const res = dv('GET', `workflows?$select=workflowid,name,statecode&$filter=name eq '${odataQuote(name)}' and category eq 5`);
+  const res = dv('GET', `workflows?$select=workflowid,name,statecode,modernflowtype&$filter=name eq '${odataQuote(name)}' and category eq 5`);
   const rows = (res.data && res.data.value) || [];
   return rows.length ? rows[0] : null;
 }
@@ -174,35 +213,62 @@ function normalizeAgentIO(definition) {
   return def;
 }
 
-function buildClientData(definition, raw) {
+// normalizeAgentIO reshapes the Skills trigger/response contract, which only agent
+// flows have. A non-agent flow (modernflowtype 0, e.g. the scheduled brief) must be
+// left alone, exactly as --raw does.
+function buildClientData(spec, raw) {
+  const definition = spec.definition;
+  const isAgentFlow = spec.modernflowtype === undefined || spec.modernflowtype === MODERN_FLOW_TYPE_COPILOT_STUDIO;
   return JSON.stringify({
     properties: {
-      connectionReferences: connectionRefsFor(definition),
-      definition: raw ? definition : normalizeAgentIO(definition),
+      connectionReferences: connectionRefsFor(definition, spec.connectionReferences),
+      definition: raw || !isAgentFlow ? definition : normalizeAgentIO(definition),
     },
     schemaVersion: '1.0.0.0',
   });
 }
 
-function deploy(defFile, activate, raw) {
+function deploy(defFile, activate, raw, allowFlowTypeChange) {
   const spec = JSON.parse(fs.readFileSync(defFile, 'utf8'));
   if (!spec.name || !spec.definition) {
     throw new Error(`${path.basename(defFile)}: spec needs "name" and "definition"`);
   }
 
-  const clientdata = buildClientData(spec.definition, raw);
+  const clientdata = buildClientData(spec, raw);
   const existing = findWorkflowByName(spec.name);
   let workflowId;
 
   if (existing) {
+    // GUARD: never silently change an existing flow's modernflowtype. Switching a
+    // plain Power Automate flow (0) to a Copilot Studio agent flow (1) is one-way
+    // for billing, and this script used to stamp 1 on every update — which would
+    // have converted flows/scheduled/daily-brief.json the first time anyone
+    // deployed it. On update we only set the type when the spec asks for a change,
+    // and even then only with --allow-flow-type-change.
+    const patch = { clientdata };
+    if (spec.modernflowtype !== undefined && spec.modernflowtype !== existing.modernflowtype) {
+      if (!allowFlowTypeChange) {
+        throw new Error(
+          `${spec.name}: spec declares modernflowtype ${spec.modernflowtype} but the deployed flow is ${existing.modernflowtype}. ` +
+          `Changing it is effectively one-way for billing. Re-run with --allow-flow-type-change if you really mean it.`
+        );
+      }
+      patch.modernflowtype = spec.modernflowtype;
+      process.stdout.write(`  WARNING  ${spec.name}: changing modernflowtype ${existing.modernflowtype} -> ${spec.modernflowtype} (one-way)\n`);
+    }
+
     // An activated flow must be drafted before its definition can be rewritten.
     if (existing.statecode === 1) {
       dv('PATCH', `workflows(${existing.workflowid})`, { statecode: 0, statuscode: 1 });
     }
-    dv('PATCH', `workflows(${existing.workflowid})`, { clientdata, modernflowtype: MODERN_FLOW_TYPE_COPILOT_STUDIO });
+    dv('PATCH', `workflows(${existing.workflowid})`, patch);
     workflowId = existing.workflowid;
     process.stdout.write(`  updated  ${spec.name}\n`);
   } else {
+    // New flows default to the Copilot Studio agent-flow type, which is what every
+    // definition in definitions/ is. A spec can opt out by declaring modernflowtype
+    // (scheduled/daily-brief.json declares 0).
+    const newType = spec.modernflowtype !== undefined ? spec.modernflowtype : MODERN_FLOW_TYPE_COPILOT_STUDIO;
     const res = dv('POST', 'workflows', {
       name: spec.name,
       description: spec.description || '',
@@ -211,7 +277,7 @@ function deploy(defFile, activate, raw) {
       primaryentity: 'none',
       statecode: 0,
       statuscode: 1,
-      modernflowtype: MODERN_FLOW_TYPE_COPILOT_STUDIO,
+      modernflowtype: newType,
       clientdata,
     });
     const location = (res.headers && res.headers['odata-entityid']) || '';
@@ -253,7 +319,7 @@ function main() {
   } else if (targets.length) {
     files = targets.map((t) => (path.isAbsolute(t) ? t : path.join(DEFS_DIR, t)));
   } else {
-    process.stderr.write('Usage: node deploy-flow.js <definition.json | --all> [--activate]\n');
+    process.stderr.write('Usage: node deploy-flow.js <definition.json | --all> [--activate] [--allow-flow-type-change]\n');
     process.exit(1);
   }
 
@@ -261,7 +327,7 @@ function main() {
   let failed = 0;
   for (const file of files) {
     try {
-      results.push(deploy(file, activate, args.includes('--raw')));
+      results.push(deploy(file, activate, args.includes('--raw'), args.includes('--allow-flow-type-change')));
     } catch (err) {
       failed++;
       process.stderr.write(`  FAILED   ${path.basename(file)}: ${err.message}\n`);

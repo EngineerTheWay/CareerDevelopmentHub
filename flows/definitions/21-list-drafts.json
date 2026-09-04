@@ -5,6 +5,13 @@
     "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
     "contentVersion": "1.0.0.0",
     "parameters": {
+      "cws_TimeZone (cws_TimeZone)": {
+        "defaultValue": "Pacific Standard Time",
+        "type": "String",
+        "metadata": {
+          "schemaName": "cws_TimeZone"
+        }
+      },
       "$authentication": {
         "defaultValue": {},
         "type": "SecureObject"
@@ -73,7 +80,7 @@
             "subject": "@coalesce(item()?['subject'],'(no subject)')",
             "to": "@coalesce(item()?['toRecipients'], item()?['to'], '')",
             "cc": "@coalesce(item()?['ccRecipients'], item()?['cc'], '')",
-            "modified": "@if(empty(coalesce(item()?['lastModifiedDateTime'],item()?['receivedDateTime'],'')),'',convertTimeZone(coalesce(item()?['lastModifiedDateTime'],item()?['receivedDateTime']),'UTC','Pacific Standard Time','yyyy-MM-dd HH:mm'))",
+            "modified": "@if(empty(coalesce(item()?['lastModifiedDateTime'],item()?['receivedDateTime'],'')),'',convertTimeZone(coalesce(item()?['lastModifiedDateTime'],item()?['receivedDateTime']),'UTC',parameters('cws_TimeZone (cws_TimeZone)'),'yyyy-MM-dd HH:mm'))",
             "body": "@replace(replace(coalesce(item()?['body'],''),'<br>',decodeUriComponent('%0A')),'<br/>',decodeUriComponent('%0A'))",
             "preview": "@coalesce(item()?['bodyPreview'],'')"
           }

@@ -446,7 +446,7 @@ export default function HomePage() {
       <InMemoryDataBanner show={HAS_IN_MEMORY_TABLES} message="This app uses draft tables for testing. Data entered won't be saved. Contact the app owner to enable storage." />
       <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight">Caleb's Career Dashboard</h1>
+          <h1 className="text-2xl font-semibold tracking-tight">{user?.firstName ? `${user.firstName}'s Career Dashboard` : 'Career Dashboard'}</h1>
           <p className="text-muted-foreground">Quickly add the next contact, application, or follow-up.</p>
 
 

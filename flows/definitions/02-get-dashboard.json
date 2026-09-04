@@ -5,6 +5,13 @@
     "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
     "contentVersion": "1.0.0.0",
     "parameters": {
+      "cws_TimeZone (cws_TimeZone)": {
+        "defaultValue": "Pacific Standard Time",
+        "type": "String",
+        "metadata": {
+          "schemaName": "cws_TimeZone"
+        }
+      },
       "$authentication": {
         "defaultValue": {},
         "type": "SecureObject"
@@ -45,11 +52,11 @@
       "Window": {
         "type": "Compose",
         "inputs": {
-          "today": "@convertFromUtc(utcNow(),'Pacific Standard Time','yyyy-MM-dd')",
-          "dueSoonEnd": "@convertFromUtc(addDays(utcNow(), if(or(empty(coalesce(triggerBody()?['dueSoonDays'],'')),equals(toLower(string(triggerBody()?['dueSoonDays'])),'none')),7,int(triggerBody()?['dueSoonDays']))),'Pacific Standard Time','yyyy-MM-dd')",
-          "stalledBefore": "@convertFromUtc(addDays(utcNow(), mul(-1, if(or(empty(coalesce(triggerBody()?['stalledDays'],'')),equals(toLower(string(triggerBody()?['stalledDays'])),'none')),21,int(triggerBody()?['stalledDays'])))),'Pacific Standard Time','yyyy-MM-dd')",
-          "startUtc": "@convertToUtc(concat(convertFromUtc(utcNow(),'Pacific Standard Time','yyyy-MM-dd'),'T00:00:00'),'Pacific Standard Time')",
-          "endUtc": "@convertToUtc(concat(convertFromUtc(utcNow(),'Pacific Standard Time','yyyy-MM-dd'),'T23:59:59'),'Pacific Standard Time')"
+          "today": "@convertFromUtc(utcNow(),parameters('cws_TimeZone (cws_TimeZone)'),'yyyy-MM-dd')",
+          "dueSoonEnd": "@convertFromUtc(addDays(utcNow(), if(or(empty(coalesce(triggerBody()?['dueSoonDays'],'')),equals(toLower(string(triggerBody()?['dueSoonDays'])),'none')),7,int(triggerBody()?['dueSoonDays']))),parameters('cws_TimeZone (cws_TimeZone)'),'yyyy-MM-dd')",
+          "stalledBefore": "@convertFromUtc(addDays(utcNow(), mul(-1, if(or(empty(coalesce(triggerBody()?['stalledDays'],'')),equals(toLower(string(triggerBody()?['stalledDays'])),'none')),21,int(triggerBody()?['stalledDays'])))),parameters('cws_TimeZone (cws_TimeZone)'),'yyyy-MM-dd')",
+          "startUtc": "@convertToUtc(concat(convertFromUtc(utcNow(),parameters('cws_TimeZone (cws_TimeZone)'),'yyyy-MM-dd'),'T00:00:00'),parameters('cws_TimeZone (cws_TimeZone)'))",
+          "endUtc": "@convertToUtc(concat(convertFromUtc(utcNow(),parameters('cws_TimeZone (cws_TimeZone)'),'yyyy-MM-dd'),'T23:59:59'),parameters('cws_TimeZone (cws_TimeZone)'))"
         },
         "runAfter": {}
       },
@@ -83,7 +90,7 @@
           "select": {
             "id": "@item()?['cws_followupid']",
             "title": "@item()?['cws_title']",
-            "dueDate": "@if(empty(coalesce(item()?['cws_duedate'],'')),'',convertFromUtc(item()?['cws_duedate'],'Pacific Standard Time','yyyy-MM-dd'))",
+            "dueDate": "@if(empty(coalesce(item()?['cws_duedate'],'')),'',formatDateTime(item()?['cws_duedate'],'yyyy-MM-dd'))",
             "relatedType": "@item()?['cws_relatedtype']",
             "label": "@coalesce(item()?['cws_RelatedApplication']?['cws_role'], item()?['cws_RelatedContact']?['cws_contactname'], '')",
             "company": "@coalesce(item()?['cws_RelatedApplication']?['cws_Company']?['cws_companyname'], item()?['cws_RelatedContact']?['cws_Company']?['cws_companyname'], '')",
@@ -166,9 +173,9 @@
             "stageLabel": "@if(equals(item()?['cws_stage'],771670000),'Researching',if(equals(item()?['cws_stage'],771670001),'Applied',if(equals(item()?['cws_stage'],771670002),'Interviewing',if(equals(item()?['cws_stage'],771670003),'Offer','Closed'))))",
             "company": "@coalesce(item()?['cws_Company']?['cws_companyname'],'')",
             "businessGroup": "@coalesce(item()?['cws_BusinessGroup']?['cws_businessgroupname'],'')",
-            "dateApplied": "@if(empty(coalesce(item()?['cws_dateapplied'],'')),'',convertFromUtc(item()?['cws_dateapplied'],'Pacific Standard Time','yyyy-MM-dd'))",
+            "dateApplied": "@if(empty(coalesce(item()?['cws_dateapplied'],'')),'',formatDateTime(item()?['cws_dateapplied'],'yyyy-MM-dd'))",
             "nextStep": "@coalesce(item()?['cws_nextstep'],'')",
-            "lastUpdated": "@convertFromUtc(item()?['modifiedon'],'Pacific Standard Time','yyyy-MM-dd')"
+            "lastUpdated": "@convertFromUtc(item()?['modifiedon'],parameters('cws_TimeZone (cws_TimeZone)'),'yyyy-MM-dd')"
           }
         },
         "runAfter": {
@@ -219,7 +226,7 @@
           "select": {
             "id": "@item()?['cws_interactionid']",
             "name": "@coalesce(item()?['cws_interactionname'],'')",
-            "date": "@if(empty(coalesce(item()?['cws_interactiondate'],'')),'',convertFromUtc(item()?['cws_interactiondate'],'Pacific Standard Time','yyyy-MM-dd'))",
+            "date": "@if(empty(coalesce(item()?['cws_interactiondate'],'')),'',formatDateTime(item()?['cws_interactiondate'],'yyyy-MM-dd'))",
             "contact": "@coalesce(item()?['cws_Contact']?['cws_contactname'],'')",
             "application": "@coalesce(item()?['cws_RelatedApplication']?['cws_role'],'')",
             "notes": "@coalesce(item()?['cws_notes'],'')"
@@ -334,8 +341,8 @@
           "from": "@outputs('Get_todays_events')?['body/value']",
           "select": {
             "subject": "@coalesce(item()?['subject'],'')",
-            "start": "@if(equals(item()?['isAllDay'],true),'All day',convertTimeZone(item()?['start'],'UTC','Pacific Standard Time','h:mm tt'))",
-            "end": "@if(equals(item()?['isAllDay'],true),'All day',convertTimeZone(item()?['end'],'UTC','Pacific Standard Time','h:mm tt'))",
+            "start": "@if(equals(item()?['isAllDay'],true),'All day',convertTimeZone(item()?['start'],'UTC',parameters('cws_TimeZone (cws_TimeZone)'),'h:mm tt'))",
+            "end": "@if(equals(item()?['isAllDay'],true),'All day',convertTimeZone(item()?['end'],'UTC',parameters('cws_TimeZone (cws_TimeZone)'),'h:mm tt'))",
             "location": "@coalesce(item()?['location'],'')",
             "organizer": "@coalesce(item()?['organizer'],'')"
           }

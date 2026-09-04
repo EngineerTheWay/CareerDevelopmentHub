@@ -70,7 +70,7 @@
           "parameters": {
             "entityName": "cws_followups",
             "item/cws_title": "@trim(triggerBody()?['title'])",
-            "item/cws_duedate": "@convertToUtc(concat(triggerBody()?['dueDate'],'T00:00:00'),'Pacific Standard Time')",
+            "item/cws_duedate": "@triggerBody()?['dueDate']",
             "item/cws_relatedtype": "@int(triggerBody()?['relatedType'])",
             "item/cws_status": 771670000,
             "item/cws_notes": "@if(equals(toLower(trim(coalesce(triggerBody()?['notes'],''))),'none'),'',coalesce(triggerBody()?['notes'],''))"
@@ -163,7 +163,7 @@
           "body": {
             "id": "@body('Create_follow_up')?['cws_followupid']",
             "title": "@body('Read_back')?['cws_title']",
-            "dueDate": "@convertFromUtc(body('Read_back')?['cws_duedate'],'Pacific Standard Time','yyyy-MM-dd')",
+            "dueDate": "@formatDateTime(body('Read_back')?['cws_duedate'],'yyyy-MM-dd')",
             "relatedType": "@body('Read_back')?['cws_relatedtype']",
             "relatedLabel": "@coalesce(body('Read_back')?['cws_RelatedApplication']?['cws_role'], body('Read_back')?['cws_RelatedContact']?['cws_contactname'], '')",
             "status": "@body('Read_back')?['cws_status']",

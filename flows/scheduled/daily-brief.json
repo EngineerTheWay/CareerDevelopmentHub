@@ -1,10 +1,23 @@
 {
   "name": "Daily Brief — Career Development Hub",
   "description": "Scheduled daily briefing. Posts today's follow-ups, overdue items, and calendar events to Teams at 8am Pacific. NOT an agent tool - this runs on a timer and is never called by Career Copilot.",
+  "modernflowtype": 0,
+  "connectionReferences": {
+    "shared_commondataserviceforapps": "cws_dailybriefdataverse",
+    "shared_office365": "new_sharedoffice365_a8d53",
+    "shared_teams": "new_sharedteams_4f86c"
+  },
   "definition": {
     "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
     "contentVersion": "1.0.0.0",
     "parameters": {
+      "cws_TimeZone (cws_TimeZone)": {
+        "defaultValue": "Pacific Standard Time",
+        "type": "String",
+        "metadata": {
+          "schemaName": "cws_TimeZone"
+        }
+      },
       "$connections": {
         "defaultValue": {},
         "type": "Object"
@@ -46,7 +59,7 @@
         "runAfter": {},
         "metadata": {},
         "type": "Compose",
-        "inputs": "@formatDateTime(convertFromUtc(utcNow(), 'Pacific Standard Time'), 'yyyy-MM-dd')"
+        "inputs": "@formatDateTime(convertFromUtc(utcNow(), parameters('cws_TimeZone (cws_TimeZone)')), 'yyyy-MM-dd')"
       },
       "Day_Window": {
         "runAfter": {
@@ -57,11 +70,12 @@
         "metadata": {},
         "type": "Compose",
         "inputs": {
-          "startUtc": "@convertToUtc(concat(outputs('Today_Pacific'), 'T00:00:00'), 'Pacific Standard Time', 'yyyy-MM-ddTHH:mm:ss')",
-          "endUtc": "@convertToUtc(concat(outputs('Today_Pacific'), 'T23:59:59'), 'Pacific Standard Time', 'yyyy-MM-ddTHH:mm:ss')",
-          "friendlyDate": "@formatDateTime(convertFromUtc(utcNow(), 'Pacific Standard Time'), 'dddd, MMMM d, yyyy')",
-          "filterStartUtc": "@concat(convertToUtc(concat(outputs('Today_Pacific'), 'T00:00:00'), 'Pacific Standard Time', 'yyyy-MM-ddTHH:mm:ss'), 'Z')",
-          "filterEndUtc": "@concat(convertToUtc(concat(formatDateTime(addDays(outputs('Today_Pacific'), 1), 'yyyy-MM-dd'), 'T00:00:00'), 'Pacific Standard Time', 'yyyy-MM-ddTHH:mm:ss'), 'Z')"
+          "startUtc": "@convertToUtc(concat(outputs('Today_Pacific'), 'T00:00:00'), parameters('cws_TimeZone (cws_TimeZone)'), 'yyyy-MM-ddTHH:mm:ss')",
+          "endUtc": "@convertToUtc(concat(outputs('Today_Pacific'), 'T23:59:59'), parameters('cws_TimeZone (cws_TimeZone)'), 'yyyy-MM-ddTHH:mm:ss')",
+          "friendlyDate": "@formatDateTime(convertFromUtc(utcNow(), parameters('cws_TimeZone (cws_TimeZone)')), 'dddd, MMMM d, yyyy')",
+          "titleDate": "@toUpper(formatDateTime(convertFromUtc(utcNow(), parameters('cws_TimeZone (cws_TimeZone)')), 'dd MMM yyyy'))",
+          "filterStartUtc": "@concat(convertToUtc(concat(outputs('Today_Pacific'), 'T00:00:00'), parameters('cws_TimeZone (cws_TimeZone)'), 'yyyy-MM-ddTHH:mm:ss'), 'Z')",
+          "filterEndUtc": "@concat(convertToUtc(concat(formatDateTime(addDays(outputs('Today_Pacific'), 1), 'yyyy-MM-dd'), 'T00:00:00'), parameters('cws_TimeZone (cws_TimeZone)'), 'yyyy-MM-ddTHH:mm:ss'), 'Z')"
         }
       },
       "Get_todays_follow_ups": {
@@ -168,7 +182,7 @@
         "type": "Select",
         "inputs": {
           "from": "@body('Get_calendar_view')?['value']",
-          "select": "@concat('• ', if(equals(item()?['isAllDay'], true), 'All day', concat(convertTimeZone(item()?['start'], 'UTC', 'Pacific Standard Time', 'h:mm tt'), ' – ', convertTimeZone(item()?['end'], 'UTC', 'Pacific Standard Time', 'h:mm tt'))), ' — ', item()?['subject'])"
+          "select": "@concat('• ', if(equals(item()?['isAllDay'], true), 'All day', concat(convertTimeZone(item()?['start'], 'UTC', parameters('cws_TimeZone (cws_TimeZone)'), 'h:mm tt'), ' – ', convertTimeZone(item()?['end'], 'UTC', parameters('cws_TimeZone (cws_TimeZone)'), 'h:mm tt'))), ' — ', item()?['subject'])"
         }
       },
       "Card_body_core": {
@@ -273,6 +287,8 @@
           "msteams": {
             "width": "Full"
           },
+          "fallbackText": "Daily Brief — @{outputs('Day_Window')['titleDate']}",
+          "speak": "Daily Brief for @{outputs('Day_Window')['friendlyDate']}",
           "body": "@if(empty(body('Select_overdue_lines')), outputs('Card_body_core'), union(outputs('Card_body_core'), outputs('Card_body_overdue')))"
         }
       },

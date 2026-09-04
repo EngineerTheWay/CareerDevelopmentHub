@@ -196,11 +196,19 @@ export function convertToIsoString(
   }
 
   if (dateOnly) {
-    parsedDate = new Date(
-      parsedDate.getFullYear(),
-      parsedDate.getMonth(),
-      parsedDate.getDate(),
-    );
+    // Emit UTC midnight of the intended calendar date. Building a LOCAL midnight and
+    // then calling toISOString() stamped the viewer's offset into the stored value
+    // (07:00:00Z in Pacific), which disagreed with every other writer of these
+    // columns — the agent flows write a plain yyyy-MM-dd, which Dataverse stores at
+    // 00:00:00Z. Two conventions in one column is what caused dates to read back a
+    // day early.
+    return new Date(
+      Date.UTC(
+        parsedDate.getFullYear(),
+        parsedDate.getMonth(),
+        parsedDate.getDate(),
+      ),
+    ).toISOString();
   }
 
   return parsedDate.toISOString();
@@ -223,12 +231,13 @@ export function convertFromIsoString(
     }
 
     if (dateOnly) {
-      // For date-only HTML5 inputs, return YYYY-MM-DD format
-      // Adjust for timezone offset to get local date
-      const localDate = new Date(
-        date.getTime() - date.getTimezoneOffset() * MILLISECONDS_IN_MINUTE,
-      );
-      return localDate.toISOString().split('T')[0];
+      // A DateOnly column carries a calendar date, not an instant, so it must NOT be
+      // shifted by the viewer's UTC offset. The old offset math moved dates across
+      // midnight: a value stored as 2026-09-03T00:00:00Z rendered as 2026-09-02 for
+      // any viewer west of UTC. Reading the UTC calendar date is correct both for
+      // timezone-independent rows (stored at 00:00Z, as the agent flows write) and
+      // for legacy user-local rows (stored at local midnight, e.g. 07:00Z).
+      return date.toISOString().split('T')[0];
     } else {
       // For datetime-local HTML5 inputs, return YYYY-MM-DDTHH:mm format
       // Convert to local time and format for datetime-local input

@@ -102,7 +102,7 @@
           "select": {
             "id": "@item()?['cws_interactionid']",
             "name": "@coalesce(item()?['cws_interactionname'],'')",
-            "date": "@if(empty(coalesce(item()?['cws_interactiondate'],'')),'',convertFromUtc(item()?['cws_interactiondate'],'Pacific Standard Time','yyyy-MM-dd'))",
+            "date": "@if(empty(coalesce(item()?['cws_interactiondate'],'')),'',formatDateTime(item()?['cws_interactiondate'],'yyyy-MM-dd'))",
             "type": "@item()?['cws_interactiontype']",
             "typeLabel": "@if(equals(item()?['cws_interactiontype'],771670000),'Networking Chat',if(equals(item()?['cws_interactiontype'],771670001),'LinkedIn',if(equals(item()?['cws_interactiontype'],771670002),'Email',if(equals(item()?['cws_interactiontype'],771670003),'Call',if(equals(item()?['cws_interactiontype'],771670004),'Meeting',if(equals(item()?['cws_interactiontype'],771670005),'Event',if(equals(item()?['cws_interactiontype'],771670006),'Interview','Other')))))))",
             "contact": "@coalesce(item()?['cws_Contact']?['cws_contactname'],'')",
@@ -137,8 +137,8 @@
           "select": {
             "id": "@item()?['cws_followupid']",
             "title": "@item()?['cws_title']",
-            "dueDate": "@if(empty(coalesce(item()?['cws_duedate'],'')),'',convertFromUtc(item()?['cws_duedate'],'Pacific Standard Time','yyyy-MM-dd'))",
-            "completedDate": "@if(empty(coalesce(item()?['cws_completeddate'],'')),'',convertFromUtc(item()?['cws_completeddate'],'Pacific Standard Time','yyyy-MM-dd'))",
+            "dueDate": "@if(empty(coalesce(item()?['cws_duedate'],'')),'',formatDateTime(item()?['cws_duedate'],'yyyy-MM-dd'))",
+            "completedDate": "@if(empty(coalesce(item()?['cws_completeddate'],'')),'',formatDateTime(item()?['cws_completeddate'],'yyyy-MM-dd'))",
             "status": "@item()?['cws_status']",
             "statusLabel": "@if(equals(item()?['cws_status'],771670001),'Completed','Open')",
             "notes": "@coalesce(item()?['cws_notes'],'')"

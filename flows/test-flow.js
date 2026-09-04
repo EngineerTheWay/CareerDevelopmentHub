@@ -19,10 +19,35 @@
 
 const { execFileSync } = require('child_process');
 const fs = require('fs');
+const os = require('os');
 const path = require('path');
 
+// Locate the plugin's dataverse-request.js without pinning a user profile or a
+// plugin version — both change between machines and plugin updates. Set the
+// DV_REQUEST env var to override if the plugin cache lives somewhere else.
+function resolveDvRequest() {
+  if (process.env.DV_REQUEST) return process.env.DV_REQUEST;
+  const base = path.join(os.homedir(), '.claude', 'plugins', 'cache', 'power-platform-skills', 'model-apps');
+  let entries = [];
+  try {
+    entries = fs.readdirSync(base);
+  } catch {
+    throw new Error(`Cannot find the power-platform-skills plugin cache at ${base}. Set DV_REQUEST to the full path of dataverse-request.js.`);
+  }
+  const found = entries
+    .map((version) => ({ version, file: path.join(base, version, 'scripts', 'dataverse-request.js') }))
+    .filter((candidate) => fs.existsSync(candidate.file))
+    .sort((a, b) => a.version.localeCompare(b.version, undefined, { numeric: true }));
+  if (!found.length) {
+    throw new Error(`No scripts/dataverse-request.js under ${base}. Set DV_REQUEST to the full path.`);
+  }
+  return found[found.length - 1].file;
+}
+
 const ENV_URL = 'https://<ORG_NAME>.crm.dynamics.com';
-const DV_REQUEST = '<PAC_SKILLS_PATH>/model-apps/2.4.4/scripts/dataverse-request.js';
+const SOLUTION = 'CareerDevelopmentHub';
+const COMPONENT_TYPE_WORKFLOW = 29;
+const DV_REQUEST = resolveDvRequest();
 const DEFS_DIR = path.join(__dirname, 'definitions');
 const TEST_PREFIX = 'ZZTest — ';
 
@@ -165,6 +190,22 @@ function deployTwin(defFile, testInput) {
     });
     workflowId = ((res.headers['odata-entityid'] || '').match(/workflows\(([^)]+)\)/) || [])[1];
     if (!workflowId) throw new Error(`${name}: could not read new workflow id`);
+  }
+
+  // The twin must be solution-aware or environment variables will not resolve:
+  // @parameters('cws_TimeZone (cws_TimeZone)') is only bound for flows that belong
+  // to a solution, so a twin outside one fails for the wrong reason. `clean`
+  // deletes these workflow rows, which removes them from the solution too — always
+  // run it before exporting.
+  try {
+    dv('POST', 'AddSolutionComponent', {
+      ComponentId: workflowId,
+      ComponentType: COMPONENT_TYPE_WORKFLOW,
+      SolutionUniqueName: SOLUTION,
+      AddRequiredComponents: false,
+    });
+  } catch (err) {
+    if (!/already exists|duplicate/i.test(err.message)) throw err;
   }
 
   dv('PATCH', `workflows(${workflowId})`, { statecode: 1, statuscode: 2 });

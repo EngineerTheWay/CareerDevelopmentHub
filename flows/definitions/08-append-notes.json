@@ -5,6 +5,13 @@
     "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
     "contentVersion": "1.0.0.0",
     "parameters": {
+      "cws_TimeZone (cws_TimeZone)": {
+        "defaultValue": "Pacific Standard Time",
+        "type": "String",
+        "metadata": {
+          "schemaName": "cws_TimeZone"
+        }
+      },
       "$authentication": {
         "defaultValue": {},
         "type": "SecureObject"
@@ -56,7 +63,7 @@
         "type": "Compose",
         "inputs": {
           "tableSet": "@if(equals(triggerBody()?['table'],'contact'),'cws_networkingcontacts',if(equals(triggerBody()?['table'],'application'),'cws_jobapplications',if(equals(triggerBody()?['table'],'followUp'),'cws_followups','cws_interactions')))",
-          "today": "@convertFromUtc(utcNow(),'Pacific Standard Time','yyyy-MM-dd')"
+          "today": "@convertFromUtc(utcNow(),parameters('cws_TimeZone (cws_TimeZone)'),'yyyy-MM-dd')"
         },
         "runAfter": {}
       },

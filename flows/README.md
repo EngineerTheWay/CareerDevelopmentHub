@@ -23,9 +23,15 @@ Design rationale is in [`../docs/FLOW-CATALOGUE.md`](../docs/FLOW-CATALOGUE.md).
 
 ## `scheduled/` — automation the agent never touches
 
-`daily-brief.json` runs on a timer at 8am Pacific and posts the day's follow-ups, overdue
+`daily-brief.json` runs on a timer at 8am and posts the day's follow-ups, overdue
 items, and calendar events to Teams. It is an ordinary Power Automate flow
 (`modernflowtype: 0`) with a recurrence trigger.
+
+Every date conversion in these flows reads the `cws_TimeZone` environment variable, so a
+new environment only needs that one value set. The recurrence trigger is the exception:
+Power Automate does not accept an expression for a trigger's `timeZone`, so the 8am is
+pinned to the literal in `daily-brief.json` (`Pacific Standard Time`) and has to be edited
+by hand per environment.
 
 ---
 

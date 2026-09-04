@@ -5,6 +5,13 @@
     "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
     "contentVersion": "1.0.0.0",
     "parameters": {
+      "cws_TimeZone (cws_TimeZone)": {
+        "defaultValue": "Pacific Standard Time",
+        "type": "String",
+        "metadata": {
+          "schemaName": "cws_TimeZone"
+        }
+      },
       "$authentication": { "defaultValue": {}, "type": "SecureObject" },
       "$connections": { "defaultValue": {}, "type": "Object" }
     },
@@ -109,9 +116,9 @@
             "stage": "@item()?['cws_stage']",
             "stageLabel": "@if(equals(item()?['cws_stage'],771670000),'Researching',if(equals(item()?['cws_stage'],771670001),'Applied',if(equals(item()?['cws_stage'],771670002),'Interviewing',if(equals(item()?['cws_stage'],771670003),'Offer','Closed'))))",
             "businessGroup": "@coalesce(item()?['cws_BusinessGroup']?['cws_businessgroupname'],'')",
-            "dateApplied": "@if(empty(coalesce(item()?['cws_dateapplied'],'')),'',convertFromUtc(item()?['cws_dateapplied'],'Pacific Standard Time','yyyy-MM-dd'))",
+            "dateApplied": "@if(empty(coalesce(item()?['cws_dateapplied'],'')),'',formatDateTime(item()?['cws_dateapplied'],'yyyy-MM-dd'))",
             "nextStep": "@coalesce(item()?['cws_nextstep'],'')",
-            "lastUpdated": "@convertFromUtc(item()?['modifiedon'],'Pacific Standard Time','yyyy-MM-dd')"
+            "lastUpdated": "@convertFromUtc(item()?['modifiedon'],parameters('cws_TimeZone (cws_TimeZone)'),'yyyy-MM-dd')"
           }
         },
         "runAfter": { "Get_applications": ["Succeeded"] }

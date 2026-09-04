@@ -109,7 +109,7 @@
             "item/cws_role": "@trim(triggerBody()?['role'])",
             "item/cws_Company@odata.bind": "@concat('/cws_companies(', triggerBody()?['companyId'], ')')",
             "item/cws_stage": "@int(triggerBody()?['stage'])",
-            "item/cws_dateapplied": "@if(or(empty(coalesce(triggerBody()?['dateApplied'],'')),equals(toLower(trim(string(triggerBody()?['dateApplied']))),'none')), null, convertToUtc(concat(triggerBody()?['dateApplied'],'T00:00:00'),'Pacific Standard Time'))",
+            "item/cws_dateapplied": "@if(or(empty(coalesce(triggerBody()?['dateApplied'],'')),equals(toLower(trim(string(triggerBody()?['dateApplied']))),'none')), null, triggerBody()?['dateApplied'])",
             "item/cws_jobid": "@if(equals(toLower(trim(coalesce(triggerBody()?['jobId'],''))),'none'),'',coalesce(triggerBody()?['jobId'],''))",
             "item/cws_joblink": "@if(equals(toLower(trim(coalesce(triggerBody()?['jobLink'],''))),'none'),'',coalesce(triggerBody()?['jobLink'],''))",
             "item/cws_city": "@if(equals(toLower(trim(coalesce(triggerBody()?['city'],''))),'none'),'',coalesce(triggerBody()?['city'],''))",
@@ -229,7 +229,7 @@
             "company": "@coalesce(body('Read_back')?['cws_Company']?['cws_companyname'],'')",
             "businessGroup": "@coalesce(body('Read_back')?['cws_BusinessGroup']?['cws_businessgroupname'],'')",
             "stage": "@body('Read_back')?['cws_stage']",
-            "dateApplied": "@if(empty(coalesce(body('Read_back')?['cws_dateapplied'],'')),'',convertFromUtc(body('Read_back')?['cws_dateapplied'],'Pacific Standard Time','yyyy-MM-dd'))",
+            "dateApplied": "@if(empty(coalesce(body('Read_back')?['cws_dateapplied'],'')),'',formatDateTime(body('Read_back')?['cws_dateapplied'],'yyyy-MM-dd'))",
             "created": true
           },
           "schema": {

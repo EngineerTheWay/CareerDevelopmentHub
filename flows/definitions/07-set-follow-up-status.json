@@ -5,6 +5,13 @@
     "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
     "contentVersion": "1.0.0.0",
     "parameters": {
+      "cws_TimeZone (cws_TimeZone)": {
+        "defaultValue": "Pacific Standard Time",
+        "type": "String",
+        "metadata": {
+          "schemaName": "cws_TimeZone"
+        }
+      },
       "$authentication": {
         "defaultValue": {},
         "type": "SecureObject"
@@ -67,7 +74,7 @@
         "inputs": {
           "previousStatus": "@body('Get_current')?['cws_status']",
           "previousCompletedDate": "@coalesce(body('Get_current')?['cws_completeddate'],'')",
-          "newCompletedDate": "@if(not(equals(string(triggerBody()?['status']),'771670001')), null, if(not(empty(coalesce(triggerBody()?['completedDate'],''))), convertToUtc(concat(triggerBody()?['completedDate'],'T00:00:00'),'Pacific Standard Time'), if(not(empty(coalesce(body('Get_current')?['cws_completeddate'],''))), body('Get_current')?['cws_completeddate'], convertToUtc(concat(convertFromUtc(utcNow(),'Pacific Standard Time','yyyy-MM-dd'),'T00:00:00'),'Pacific Standard Time'))))"
+          "newCompletedDate": "@if(not(equals(string(triggerBody()?['status']),'771670001')), null, if(not(empty(coalesce(triggerBody()?['completedDate'],''))), triggerBody()?['completedDate'], if(not(empty(coalesce(body('Get_current')?['cws_completeddate'],''))), body('Get_current')?['cws_completeddate'], convertFromUtc(utcNow(),parameters('cws_TimeZone (cws_TimeZone)'),'yyyy-MM-dd'))))"
         },
         "runAfter": {
           "Get_current": [
@@ -127,8 +134,8 @@
             "previousStatus": "@outputs('Resolve_completed_date')['previousStatus']",
             "status": "@body('Read_back')?['cws_status']",
             "statusLabel": "@if(equals(body('Read_back')?['cws_status'],771670001),'Completed','Open')",
-            "completedDate": "@if(empty(coalesce(body('Read_back')?['cws_completeddate'],'')),'',convertFromUtc(body('Read_back')?['cws_completeddate'],'Pacific Standard Time','yyyy-MM-dd'))",
-            "dueDate": "@if(empty(coalesce(body('Read_back')?['cws_duedate'],'')),'',convertFromUtc(body('Read_back')?['cws_duedate'],'Pacific Standard Time','yyyy-MM-dd'))"
+            "completedDate": "@if(empty(coalesce(body('Read_back')?['cws_completeddate'],'')),'',formatDateTime(body('Read_back')?['cws_completeddate'],'yyyy-MM-dd'))",
+            "dueDate": "@if(empty(coalesce(body('Read_back')?['cws_duedate'],'')),'',formatDateTime(body('Read_back')?['cws_duedate'],'yyyy-MM-dd'))"
           },
           "schema": {
             "type": "object",

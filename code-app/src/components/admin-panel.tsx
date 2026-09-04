@@ -1,5 +1,5 @@
-import { useMemo, useState } from 'react';
-import { AlertTriangle, BriefcaseBusiness, Building2, ChevronsUpDown, Download, Merge, Save, Search, Trash2, Users, X } from 'lucide-react';
+import { useMemo, useRef, useState } from 'react';
+import { AlertTriangle, BriefcaseBusiness, Building2, ChevronsUpDown, Download, Merge, Save, Search, Trash2, Upload, Users, X } from 'lucide-react';
 import { toast } from 'sonner';
 import { isDuplicateKeyError } from '@/lib/unique-records';
 
@@ -14,18 +14,24 @@ import { Input } from '@/components/ui/input';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { useBusinessGroupList, useDeleteBusinessGroup, useUpdateBusinessGroup } from '@/generated/hooks/use-business-group';
-import { useCompanyList, useDeleteCompany, useUpdateCompany } from '@/generated/hooks/use-company';
-import { useDeleteFollowUp, useUpdateFollowUp } from '@/generated/hooks/use-follow-up';
-import { useContactApplicationList, useDeleteContactApplication } from '@/generated/hooks/use-contact-application';
-import { useDeleteJobApplication, useUpdateJobApplication } from '@/generated/hooks/use-job-application';
-import { useDeleteNetworkingContact, useUpdateNetworkingContact } from '@/generated/hooks/use-networking-contact';
+import { useBusinessGroupList, useCreateBusinessGroup, useDeleteBusinessGroup, useUpdateBusinessGroup } from '@/generated/hooks/use-business-group';
+import { useCompanyList, useCreateCompany, useDeleteCompany, useUpdateCompany } from '@/generated/hooks/use-company';
+import { useCreateFollowUp, useDeleteFollowUp, useUpdateFollowUp } from '@/generated/hooks/use-follow-up';
+import { useContactApplicationList, useCreateContactApplication, useDeleteContactApplication } from '@/generated/hooks/use-contact-application';
+import { useCreateInteraction, useInteractionList } from '@/generated/hooks/use-interaction';
+import { useCreateJobApplication, useDeleteJobApplication, useUpdateJobApplication } from '@/generated/hooks/use-job-application';
+import { useCreateNetworkingContact, useDeleteNetworkingContact, useUpdateNetworkingContact } from '@/generated/hooks/use-networking-contact';
 import type { BusinessGroup } from '@/generated/models/business-group-model';
 import type { ContactApplication } from '@/generated/models/contact-application-model';
 import type { Company } from '@/generated/models/company-model';
 import type { FollowUp } from '@/generated/models/follow-up-model';
+import type { Interaction } from '@/generated/models/interaction-model';
 import type { JobApplication } from '@/generated/models/job-application-model';
 import type { NetworkingContact } from '@/generated/models/networking-contact-model';
+import writeXlsxFile from 'write-excel-file/browser';
+import readXlsxFile from 'read-excel-file/browser';
+import { buildPlan, planSummary, type ImportPlan, type Workbook } from '@/lib/restore-import';
+import { executePlan } from '@/lib/restore-execute';
 import { cn } from '@/lib/utils';
 
 type CompanyUsage = { applications: number; contacts: number; businessGroups: number; total: number };
@@ -33,12 +39,15 @@ type BusinessGroupUsage = { applications: number; contacts: number; total: numbe
 type DeleteTarget = { type: 'company'; record: Company; usage: CompanyUsage } | { type: 'businessGroup'; record: BusinessGroup; usage: BusinessGroupUsage };
 type MergeTarget = { type: 'company'; source: Company; targetId: string } | { type: 'businessGroup'; source: BusinessGroup; targetId: string };
 type SaveTarget = { type: 'company'; record: Company } | { type: 'businessGroup'; record: BusinessGroup };
-type ExportTarget = 'contacts' | 'applications' | 'followUps' | 'all';
+type ExportTarget = 'contacts' | 'applications' | 'followUps' | 'interactions' | 'all';
 type FieldOption<T> = { value: string; label: string; getValue: (record: T) => string | undefined };
 type AdminPanelProps = { applications: JobApplication[]; contacts: NetworkingContact[]; followUps: FollowUp[] };
 
 const normalizeName = (value: string) => value.trim().toLowerCase();
 const csvCell = (value: string | number | undefined) => `"${String(value ?? '').replaceAll('"', '""')}"`;
+// Stamp exports with the date so successive downloads don't overwrite each other and
+// it stays obvious how current a saved copy is.
+const exportStamp = () => new Date().toISOString().slice(0, 10);
 const downloadTextFile = (filename: string, content: string, type: string) => {
   const url = URL.createObjectURL(new Blob([content], { type }));
   const link = document.createElement('a');
@@ -47,11 +56,21 @@ const downloadTextFile = (filename: string, content: string, type: string) => {
   link.click();
   URL.revokeObjectURL(url);
 };
-const downloadCsv = (filename: string, rows: Array<Array<string | number | undefined>>) => downloadTextFile(filename, rows.map((row: Array<string | number | undefined>) => row.map(csvCell).join(',')).join('\n'), 'text/csv;charset=utf-8;');
-const xmlCell = (value: string | number | undefined) => String(value ?? '').replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;').replaceAll('"', '&quot;');
-const downloadExcelWorkbook = (filename: string, sheets: Array<{ name: string; rows: Array<Array<string | number | undefined>> }>) => {
-  const workbook = `<?xml version="1.0"?><Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet" xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet">${sheets.map((sheet: { name: string; rows: Array<Array<string | number | undefined>> }) => `<Worksheet ss:Name="${xmlCell(sheet.name)}"><Table>${sheet.rows.map((row: Array<string | number | undefined>) => `<Row>${row.map((cell: string | number | undefined) => `<Cell><Data ss:Type="String">${xmlCell(cell)}</Data></Cell>`).join('')}</Row>`).join('')}</Table></Worksheet>`).join('')}</Workbook>`;
-  downloadTextFile(filename, workbook, 'application/vnd.ms-excel;charset=utf-8;');
+// The BOM makes Excel read the file as UTF-8. Without it, any non-ASCII character in a
+// name or note (accents, curly quotes pasted from email) opens as mojibake.
+const downloadCsv = (filename: string, rows: Array<Array<string | number | undefined>>) => downloadTextFile(filename, '﻿' + rows.map((row: Array<string | number | undefined>) => row.map(csvCell).join(',')).join('\r\n'), 'text/csv;charset=utf-8;');
+// A real .xlsx via write-excel-file. The previous implementation emitted
+// SpreadsheetML 2003 XML, which Excel opens only after warning that the format and
+// extension disagree, and which Windows does not associate with Excel at all.
+const downloadXlsxWorkbook = async (filename: string, sheets: Array<{ name: string; rows: Array<Array<string | number | undefined>> }>) => {
+  const blob = await writeXlsxFile(sheets.map((sheet: { name: string; rows: Array<Array<string | number | undefined>> }) => ({ sheet: sheet.name, data: sheet.rows }))).toBlob();
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = filename;
+  link.click();
+  // Revoking immediately can cancel the download of a larger blob in some browsers.
+  setTimeout(() => URL.revokeObjectURL(url), 10_000);
 };
 const matchesSearch = <T,>(record: T, search: string, fields: Array<FieldOption<T>>) => fields.some((field: FieldOption<T>) => (field.getValue(record) ?? '').toLowerCase().includes(search.toLowerCase()));
 const matchesFieldFilter = <T,>(record: T, fieldValue: string, optionValues: string[], fields: Array<FieldOption<T>>) => {
@@ -77,6 +96,17 @@ export function AdminPanel({ applications, contacts, followUps }: AdminPanelProp
   const updateContact = useUpdateNetworkingContact();
   const deleteContact = useDeleteNetworkingContact();
   const { data: contactApplicationData = [] } = useContactApplicationList();
+  const { data: interactions = [] } = useInteractionList();
+  const createCompany = useCreateCompany();
+  const createBusinessGroup = useCreateBusinessGroup();
+  const createJobApplication = useCreateJobApplication();
+  const createNetworkingContact = useCreateNetworkingContact();
+  const createInteraction = useCreateInteraction();
+  const createFollowUp = useCreateFollowUp();
+  const createContactApplication = useCreateContactApplication();
+  const restoreInputRef = useRef<HTMLInputElement>(null);
+  const [restorePlan, setRestorePlan] = useState<ImportPlan | null>(null);
+  const [restoreProgress, setRestoreProgress] = useState<{ done: number; total: number; label: string } | null>(null);
   const deleteContactApplication = useDeleteContactApplication();
   const updateFollowUp = useUpdateFollowUp();
   const deleteFollowUp = useDeleteFollowUp();
@@ -203,13 +233,68 @@ export function AdminPanel({ applications, contacts, followUps }: AdminPanelProp
   const hasSelectedFollowUps = selectedFollowUpIds.length > 0;
   const applicationContactNames = useMemo(() => { const names = new Map<string, string[]>(); contactApplications.forEach((association: ContactApplication) => { const applicationId = association.jobApplication?.id; names.set(applicationId, [...(names.get(applicationId) ?? []), association.networkingContact?.contactName]); }); return names; }, [contactApplications]);
   const contactApplicationNames = useMemo(() => { const names = new Map<string, string[]>(); contactApplications.forEach((association: ContactApplication) => { const contactId = association.networkingContact?.id; names.set(contactId, [...(names.get(contactId) ?? []), association.jobApplication?.role]); }); return names; }, [contactApplications]);
+  // Interactions carry the conversation history — the one thing a departing user cannot
+  // reconstruct from memory — so they belong in every full export.
+  const interactionRows = useMemo((): Array<Array<string | number | undefined>> => [['ID', 'Interaction', 'Date', 'Type', 'Contact ID', 'Contact', 'Application ID', 'Application Role', 'Notes'], ...[...interactions].sort((first: Interaction, second: Interaction) => String(second.interactionDate ?? '').localeCompare(String(first.interactionDate ?? ''))).map((interaction: Interaction) => [interaction.id, interaction.interactionName, interaction.interactionDate, interaction.interactionTypeKey, interaction.contact?.id, interaction.contact?.contactName, interaction.relatedApplication?.id, interaction.relatedApplication?.role, interaction.notes])], [interactions]);
   const companyRows = useMemo((): Array<Array<string | number | undefined>> => [['ID', 'Company', 'Contacts', 'Applications', 'Business Groups', 'Total Linked Records'], ...sortedCompanies.map((company: Company) => { const usage = companyUsage.get(company.id) ?? { applications: 0, contacts: 0, businessGroups: 0, total: 0 }; return [company.id, company.companyName, usage.contacts, usage.applications, usage.businessGroups, usage.total]; })], [companyUsage, sortedCompanies]);
   const businessGroupRows = useMemo((): Array<Array<string | number | undefined>> => [['ID', 'Business Group', 'Company', 'Contacts', 'Applications', 'Total Linked Records'], ...businessGroups.map((group: BusinessGroup) => { const usage = businessGroupUsage.get(group.id) ?? { applications: 0, contacts: 0, total: 0 }; return [group.id, group.businessGroupName, group.company?.companyName, usage.contacts, usage.applications, usage.total]; })], [businessGroupUsage, businessGroups]);
   const applicationRows = useMemo((): Array<Array<string | number | undefined>> => [['ID', 'Role', 'Company', 'Business Group', 'Stage', 'Arrangement', 'City', 'Date Applied', 'Job ID', 'Job Link', 'Associated Contacts', 'Notes'], ...applications.map((application: JobApplication) => [application.id, application.role, application.company?.companyName, application.businessGroup?.businessGroupName, application.stageKey, application.arrangementKey, application.city, application.dateApplied, application.jobID, application.jobLink, (applicationContactNames.get(application.id) ?? []).join('; '), application.notes])], [applicationContactNames, applications]);
   const contactRows = useMemo((): Array<Array<string | number | undefined>> => [['ID', 'Name', 'Role', 'Company', 'Business Group', 'Relationship', 'Email', 'City', 'Associated Applications', 'Notes'], ...contacts.map((contact: NetworkingContact) => [contact.id, contact.contactName, contact.role, contact.company?.companyName, contact.businessGroup?.businessGroupName, contact.relationshipKey, contact.email, contact.city, (contactApplicationNames.get(contact.id) ?? []).join('; '), contact.notes])], [contactApplicationNames, contacts]);
   const followUpRows = useMemo((): Array<Array<string | number | undefined>> => [['ID', 'Title', 'Status', 'Due Date', 'Completed Date', 'Related Type', 'Related Contact', 'Related Application', 'Reminder Enabled', 'Reminder Start', 'Reminder End', 'Reminder Time Zone', 'Reminder Sync Status', 'Reminder Last Synced', 'Reminder Sync Error', 'Outlook Calendar ID', 'Outlook Event ID', 'Notes'], ...followUps.map((followUp: FollowUp) => [followUp.id, followUp.title, followUp.statusKey, followUp.dueDate, followUp.completedDate, followUp.relatedTypeKey, followUp.relatedContact?.contactName, followUp.relatedApplication?.role, followUp.reminderEnabled === undefined ? undefined : String(followUp.reminderEnabled), followUp.reminderStartAt, followUp.reminderEndAt, followUp.reminderTimeZone, followUp.reminderSnycStatusKey, followUp.reminderLastSyncedAt, followUp.reminderSyncError, followUp.outlookCalendarId, followUp.outlookEventId, followUp.notes])], [followUps]);
   const associationRows = useMemo((): Array<Array<string | number | undefined>> => [['ID', 'Association Name', 'Contact ID', 'Contact Name', 'Application ID', 'Application Role'], ...contactApplications.map((association: ContactApplication) => [association.id, association.contactApplicationName, association.networkingContact?.id, association.networkingContact?.contactName, association.jobApplication?.id, association.jobApplication?.role])], [contactApplications]);
-  const confirmExport = () => { if (!exportTarget) return; if (exportTarget === 'contacts') downloadCsv('contacts.csv', contactRows); else if (exportTarget === 'applications') downloadCsv('applications.csv', applicationRows); else if (exportTarget === 'followUps') downloadCsv('follow-ups.csv', followUpRows); else downloadExcelWorkbook('career-data.xls', [{ name: 'Companies', rows: companyRows }, { name: 'Business Groups', rows: businessGroupRows }, { name: 'Applications', rows: applicationRows }, { name: 'Contacts', rows: contactRows }, { name: 'Follow-ups', rows: followUpRows }, { name: 'Associations', rows: associationRows }]); toast.success('Exported admin data'); setExportTarget(null); };
+  const confirmExport = async () => { if (!exportTarget) return; const stamp = exportStamp(); const target = exportTarget; setExportTarget(null); try { if (target === 'contacts') downloadCsv(`contacts-${stamp}.csv`, contactRows); else if (target === 'applications') downloadCsv(`applications-${stamp}.csv`, applicationRows); else if (target === 'followUps') downloadCsv(`follow-ups-${stamp}.csv`, followUpRows); else if (target === 'interactions') downloadCsv(`interactions-${stamp}.csv`, interactionRows); else await downloadXlsxWorkbook(`career-data-${stamp}.xlsx`, [{ name: 'Companies', rows: companyRows }, { name: 'Business Groups', rows: businessGroupRows }, { name: 'Applications', rows: applicationRows }, { name: 'Contacts', rows: contactRows }, { name: 'Interactions', rows: interactionRows }, { name: 'Follow-ups', rows: followUpRows }, { name: 'Associations', rows: associationRows }]); toast.success('Exported admin data'); } catch { toast.error('Export failed'); } };
+
+  // --- Restore from a workbook this app exported -------------------------------
+  // Two phases on purpose: read + plan first so the user sees what will happen,
+  // then execute only on confirmation. The ids in the file are NOT identity here
+  // (Dataverse issues new GUIDs and the SDK cannot supply one), so the plan treats
+  // them purely as join keys and the executor maps old -> new as it writes.
+  const handleRestoreFile = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    event.target.value = '';
+    if (!file) return;
+    try {
+      const sheets = await readXlsxFile(file);
+      const book: Workbook = {};
+      sheets.forEach((sheet: { sheet: string; data: unknown[][] }) => { book[sheet.sheet] = sheet.data as Workbook[string]; });
+      const plan = buildPlan(book, { companies, businessGroups, applications, contacts, interactions, followUps, associations: contactApplications });
+      if (plan.items.length === 0) { toast.error('No importable rows found. Use a workbook exported from this app.'); return; }
+      setRestorePlan(plan);
+    } catch {
+      toast.error('Could not read that file. Use the .xlsx workbook exported from this app.');
+    }
+  };
+
+  const confirmRestore = async () => {
+    if (!restorePlan) return;
+    const plan = restorePlan;
+    setRestorePlan(null);
+    setRestoreProgress({ done: 0, total: plan.items.length, label: 'Starting' });
+    try {
+      const existingAssociations = new Set(contactApplications.map((a: ContactApplication) => `${a.networkingContact?.id ?? ''}::${a.jobApplication?.id ?? ''}`));
+      const result = await executePlan(plan, {
+        company: (data) => createCompany.mutateAsync(data),
+        businessGroup: (data) => createBusinessGroup.mutateAsync(data),
+        application: (data) => createJobApplication.mutateAsync(data),
+        contact: (data) => createNetworkingContact.mutateAsync(data),
+        interaction: (data) => createInteraction.mutateAsync(data),
+        followUp: (data) => createFollowUp.mutateAsync(data),
+        association: (data) => createContactApplication.mutateAsync(data),
+      }, {
+        existingAssociations,
+        onProgress: (done, total, label) => setRestoreProgress({ done, total, label }),
+      });
+      if (result.failures.length > 0) {
+        toast.error(`Restored ${result.created} record(s); ${result.failures.length} failed. First error: ${result.failures[0].reason}`);
+      } else {
+        toast.success(`Restored ${result.created} record(s), reused ${result.reused} existing.`);
+      }
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Restore failed');
+    } finally {
+      setRestoreProgress(null);
+    }
+  };
 
   return (
     <div className="w-full max-w-full space-y-4 overflow-hidden">
@@ -220,9 +305,11 @@ export function AdminPanel({ applications, contacts, followUps }: AdminPanelProp
         <AccordionItem value="companies" className="w-full max-w-full min-w-0 border-0"><Card className="w-full max-w-full min-w-0 bg-card text-card-foreground"><CardHeader className="pb-3"><AccordionTrigger className="w-full py-0 hover:no-underline"><span className="flex w-full items-center justify-between gap-3 text-left"><span><CardTitle className="flex items-center gap-2 text-base"><Building2 className="h-4 w-4" /> Companies</CardTitle><CardDescription className="mt-1">Edit names, search companies, and merge duplicate records.</CardDescription></span><Badge variant="secondary">{companies.length} total</Badge></span></AccordionTrigger></CardHeader><AccordionContent><CardContent className="space-y-3 pt-0">{searchOnlyControl(companySearch, setCompanySearch, 'Search companies')}<div className="max-h-[24rem] overflow-auto"><Table><TableHeader><TableRow><TableHead>Name</TableHead><TableHead>Merge into</TableHead><TableHead>Linked records</TableHead><TableHead>Status</TableHead><TableHead>Actions</TableHead></TableRow></TableHeader><TableBody>{searchableCompanies.map((company: Company) => { const usage = companyUsage.get(company.id) ?? { applications: 0, contacts: 0, businessGroups: 0, total: 0 }; const draft = companyDrafts[company.id] ?? company.companyName; const isDuplicate = (duplicateCompanyNames.get(normalizeName(company.companyName)) ?? 0) > 1; const mergeValue = companyMergeTargets[company.id] ?? 'none'; return <TableRow key={company.id}><TableCell><Input value={draft} onChange={(event: React.ChangeEvent<HTMLInputElement>) => setCompanyDrafts((current: Record<string, string>) => ({ ...current, [company.id]: event.target.value }))} /></TableCell><TableCell><Select value={mergeValue} onValueChange={(value: string) => setCompanyMergeTargets((current: Record<string, string>) => ({ ...current, [company.id]: value }))}><SelectTrigger className="w-52" aria-label={`Merge ${company.companyName} into`}><SelectValue placeholder="Select company" /></SelectTrigger><SelectContent><SelectItem value="none">Select company</SelectItem>{sortedCompanies.filter((target: Company) => target.id !== company.id && Boolean(target.companyName.trim())).map((target: Company) => <SelectItem key={target.id} value={String(target.id)}>{target.companyName}</SelectItem>)}</SelectContent></Select></TableCell><TableCell className="text-sm text-muted-foreground">{usage.contacts} contacts · {usage.applications} applications · {usage.businessGroups} groups</TableCell><TableCell>{isDuplicate ? <Badge variant="secondary">Possible duplicate</Badge> : <Badge variant="outline">Unique</Badge>}</TableCell><TableCell><div className="flex items-center gap-2"><Button type="button" variant="outline" size="icon-sm" onClick={() => setSaveTarget({ type: 'company', record: company })} disabled={updateCompany.isPending} aria-label={`Save ${company.companyName}`}><Save className="h-4 w-4" /></Button><Button type="button" variant="secondary" size="icon-sm" onClick={() => setMergeTarget({ type: 'company', source: company, targetId: mergeValue })} disabled={mergeValue === 'none'} aria-label={`Merge ${company.companyName}`}><Merge className="h-4 w-4" /></Button><Button type="button" variant="ghost" size="icon-sm" className="text-destructive hover:bg-card hover:text-destructive" onClick={() => setDeleteTarget({ type: 'company', record: company, usage })} disabled={usage.total > 0 || deleteCompany.isPending} aria-label={`Delete ${company.companyName}`}><Trash2 className="h-4 w-4" /></Button></div></TableCell></TableRow>; })}</TableBody></Table></div><div className="flex items-start gap-2 rounded-lg bg-muted p-3 text-sm text-muted-foreground"><AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />Merge moves linked records first. Delete is available only for empty companies.</div></CardContent></AccordionContent></Card></AccordionItem>
         <AccordionItem value="business-groups" className="w-full max-w-full min-w-0 border-0"><Card className="w-full max-w-full min-w-0 bg-card text-card-foreground"><CardHeader className="pb-3"><AccordionTrigger className="w-full py-0 hover:no-underline"><span className="flex w-full items-center justify-between gap-3 text-left"><span><CardTitle className="flex items-center gap-2 text-base"><Users className="h-4 w-4" /> Business groups</CardTitle><CardDescription className="mt-1">Search groups, merge duplicates within each company, and check associated rows before removal.</CardDescription></span><Badge variant="secondary">{businessGroups.length} total</Badge></span></AccordionTrigger></CardHeader><AccordionContent><CardContent className="space-y-3 pt-0">{filterControls(businessGroupSearch, setBusinessGroupSearch, businessGroupFilterField, setBusinessGroupFilterField, businessGroupFilterValues, setBusinessGroupFilterValues, businessGroupFields, businessGroupFilterOptions, 'Search groups')}<div className="max-h-[38vh] overflow-auto"><Table><TableHeader><TableRow><TableHead>Name</TableHead><TableHead>Company</TableHead><TableHead>Merge into</TableHead><TableHead>Linked records</TableHead><TableHead>Status</TableHead><TableHead>Actions</TableHead></TableRow></TableHeader><TableBody>{filteredBusinessGroups.map((group: BusinessGroup) => { const usage = businessGroupUsage.get(group.id) ?? { applications: 0, contacts: 0, total: 0 }; const draft = businessGroupDrafts[group.id] ?? group.businessGroupName; const isDuplicate = (duplicateBusinessGroupNames.get(`${group.company?.id}:${normalizeName(group.businessGroupName)}`) ?? 0) > 1; const mergeValue = businessGroupMergeTargets[group.id] ?? 'none'; return <TableRow key={group.id}><TableCell><Input value={draft} onChange={(event: React.ChangeEvent<HTMLInputElement>) => setBusinessGroupDrafts((current: Record<string, string>) => ({ ...current, [group.id]: event.target.value }))} /></TableCell><TableCell>{group.company?.companyName}</TableCell><TableCell><Select value={mergeValue} onValueChange={(value: string) => setBusinessGroupMergeTargets((current: Record<string, string>) => ({ ...current, [group.id]: value }))}><SelectTrigger className="w-52" aria-label={`Merge ${group.businessGroupName} into`}><SelectValue placeholder="Select group" /></SelectTrigger><SelectContent><SelectItem value="none">Select group</SelectItem>{businessGroups.filter((target: BusinessGroup) => target.id !== group.id && Boolean(group.company?.id) && target.company?.id === group.company?.id && Boolean(target.businessGroupName.trim())).map((target: BusinessGroup) => <SelectItem key={target.id} value={String(target.id)}>{target.businessGroupName}</SelectItem>)}</SelectContent></Select></TableCell><TableCell className="text-sm text-muted-foreground">{usage.contacts} contacts · {usage.applications} applications</TableCell><TableCell>{isDuplicate ? <Badge variant="secondary">Possible duplicate</Badge> : <Badge variant="outline">Unique</Badge>}</TableCell><TableCell><div className="flex items-center gap-2"><Button type="button" variant="outline" size="icon-sm" onClick={() => setSaveTarget({ type: 'businessGroup', record: group })} disabled={updateBusinessGroup.isPending} aria-label={`Save ${group.businessGroupName}`}><Save className="h-4 w-4" /></Button><Button type="button" variant="secondary" size="icon-sm" onClick={() => setMergeTarget({ type: 'businessGroup', source: group, targetId: mergeValue })} disabled={mergeValue === 'none'} aria-label={`Merge ${group.businessGroupName}`}><Merge className="h-4 w-4" /></Button><Button type="button" variant="ghost" size="icon-sm" className="text-destructive hover:bg-card hover:text-destructive" onClick={() => setDeleteTarget({ type: 'businessGroup', record: group, usage })} disabled={usage.total > 0 || deleteBusinessGroup.isPending} aria-label={`Delete ${group.businessGroupName}`}><Trash2 className="h-4 w-4" /></Button></div></TableCell></TableRow>; })}</TableBody></Table></div><div className="flex items-start gap-2 rounded-lg bg-muted p-3 text-sm text-muted-foreground"><AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />Merge moves linked records first. Delete is available only for empty business groups.</div></CardContent></AccordionContent></Card></AccordionItem>
       </Accordion>
-      <Card className="bg-muted text-muted-foreground"><CardContent className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between"><div className="flex items-center gap-2"><Download className="h-4 w-4" /><span className="font-medium text-foreground">Export data to CSV</span></div><div className="flex flex-wrap gap-2 sm:justify-end"><Button type="button" variant="outline" size="sm" onClick={() => setExportTarget('contacts')}>Contacts</Button><Button type="button" variant="outline" size="sm" onClick={() => setExportTarget('applications')}>Applications</Button><Button type="button" variant="outline" size="sm" onClick={() => setExportTarget('followUps')}>Follow-ups</Button><Button type="button" variant="default" size="sm" onClick={() => setExportTarget('all')}>All</Button></div></CardContent></Card>
+      <Card className="bg-muted text-muted-foreground"><CardContent className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between"><div className="flex items-center gap-2"><Download className="h-4 w-4" /><span className="font-medium text-foreground">Export your data</span></div><div className="flex flex-wrap gap-2 sm:justify-end"><Button type="button" variant="outline" size="sm" onClick={() => setExportTarget('contacts')}>Contacts</Button><Button type="button" variant="outline" size="sm" onClick={() => setExportTarget('applications')}>Applications</Button><Button type="button" variant="outline" size="sm" onClick={() => setExportTarget('interactions')}>Interactions</Button><Button type="button" variant="outline" size="sm" onClick={() => setExportTarget('followUps')}>Follow-ups</Button><Button type="button" variant="default" size="sm" onClick={() => setExportTarget('all')}>All (workbook)</Button></div></CardContent></Card>
+      <Card className="bg-muted text-muted-foreground"><CardContent className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between"><div className="flex items-center gap-2"><Upload className="h-4 w-4" /><div><span className="font-medium text-foreground">Restore from export</span><p className="text-xs">Re-import a workbook exported from this app.</p></div></div><div className="flex flex-wrap gap-2 sm:justify-end"><input ref={restoreInputRef} type="file" accept=".xlsx" className="hidden" onChange={handleRestoreFile} /><Button type="button" variant="outline" size="sm" disabled={restoreProgress !== null} onClick={() => restoreInputRef.current?.click()}>{restoreProgress ? `Restoring ${restoreProgress.done}/${restoreProgress.total}` : 'Choose workbook'}</Button></div></CardContent></Card>
       <AlertDialog open={saveTarget !== null} onOpenChange={(open: boolean) => { if (!open) setSaveTarget(null); }}><AlertDialogContent><AlertDialogHeader><AlertDialogTitle>Save data management changes?</AlertDialogTitle><AlertDialogDescription>This will rename {saveTarget?.type === 'company' ? saveTarget.record.companyName : saveTarget?.record.businessGroupName} across admin reference data.</AlertDialogDescription></AlertDialogHeader><AlertDialogFooter><AlertDialogCancel>Cancel</AlertDialogCancel><AlertDialogAction onClick={confirmSave} disabled={updateCompany.isPending || updateBusinessGroup.isPending}>Save changes</AlertDialogAction></AlertDialogFooter></AlertDialogContent></AlertDialog>
       <AlertDialog open={exportTarget !== null} onOpenChange={(open: boolean) => { if (!open) setExportTarget(null); }}><AlertDialogContent><AlertDialogHeader><AlertDialogTitle>Export data management data?</AlertDialogTitle><AlertDialogDescription>This will download the selected data export to your device.</AlertDialogDescription></AlertDialogHeader><AlertDialogFooter><AlertDialogCancel>Cancel</AlertDialogCancel><AlertDialogAction onClick={confirmExport}>Export</AlertDialogAction></AlertDialogFooter></AlertDialogContent></AlertDialog>
+      <AlertDialog open={restorePlan !== null} onOpenChange={(open: boolean) => { if (!open) setRestorePlan(null); }}><AlertDialogContent><AlertDialogHeader><AlertDialogTitle>Restore this workbook?</AlertDialogTitle><AlertDialogDescription>Nothing has been written yet. Records that already exist are reused rather than duplicated. Interactions and follow-ups are matched on name and date, so re-importing the same workbook will not duplicate them.</AlertDialogDescription></AlertDialogHeader>{restorePlan ? (<div className="max-h-64 overflow-y-auto text-sm"><Table><TableHeader><TableRow><TableHead>Sheet</TableHead><TableHead className="text-right">Create</TableHead><TableHead className="text-right">Reuse</TableHead><TableHead className="text-right">Skip</TableHead></TableRow></TableHeader><TableBody>{planSummary(restorePlan).map((row: { sheet: string; create: number; reuse: number; skip: number }) => (<TableRow key={row.sheet}><TableCell>{row.sheet}</TableCell><TableCell className="text-right">{row.create}</TableCell><TableCell className="text-right">{row.reuse}</TableCell><TableCell className="text-right">{row.skip}</TableCell></TableRow>))}</TableBody></Table>{restorePlan.issues.length > 0 ? (<div className="mt-3 space-y-1"><p className="font-medium text-foreground">Rows that will be skipped</p>{restorePlan.issues.slice(0, 8).map((issue: { sheet: string; row: number; reason: string }, index: number) => (<p key={index} className="text-xs text-muted-foreground">{issue.sheet} row {issue.row}: {issue.reason}</p>))}{restorePlan.issues.length > 8 ? (<p className="text-xs text-muted-foreground">and {restorePlan.issues.length - 8} more</p>) : null}</div>) : null}</div>) : null}<AlertDialogFooter><AlertDialogCancel>Cancel</AlertDialogCancel><AlertDialogAction onClick={confirmRestore}>Restore {restorePlan?.totalCreate ?? 0} record(s)</AlertDialogAction></AlertDialogFooter></AlertDialogContent></AlertDialog>
       <AlertDialog open={deleteTarget !== null} onOpenChange={(open: boolean) => { if (!open) setDeleteTarget(null); }}><AlertDialogContent><AlertDialogHeader><AlertDialogTitle>Delete this data record?</AlertDialogTitle><AlertDialogDescription>This will permanently delete {deleteTarget?.type === 'company' ? deleteTarget.record.companyName : deleteTarget?.record.businessGroupName}. This action cannot be undone.</AlertDialogDescription></AlertDialogHeader><AlertDialogFooter><AlertDialogCancel>Cancel</AlertDialogCancel><AlertDialogAction className="delete-confirm-button" onClick={confirmDelete} disabled={deleteCompany.isPending || deleteBusinessGroup.isPending}>Delete</AlertDialogAction></AlertDialogFooter></AlertDialogContent></AlertDialog>
       <AlertDialog open={mergeTarget !== null} onOpenChange={(open: boolean) => { if (!open) setMergeTarget(null); }}><AlertDialogContent><AlertDialogHeader><AlertDialogTitle>Merge this data record?</AlertDialogTitle><AlertDialogDescription>Linked applications, contacts, and business groups will move to the selected target. Contact-application associations remain attached to their contact and application records.</AlertDialogDescription></AlertDialogHeader><AlertDialogFooter><AlertDialogCancel>Cancel</AlertDialogCancel><AlertDialogAction onClick={confirmMerge} disabled={updateApplication.isPending || updateContact.isPending || updateBusinessGroup.isPending}>Merge</AlertDialogAction></AlertDialogFooter></AlertDialogContent></AlertDialog>
     </div>
